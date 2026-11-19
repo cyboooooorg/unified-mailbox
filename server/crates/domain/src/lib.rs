@@ -15,3 +15,7 @@ pub use mail::*;
 pub mod tag;
 
 pub use tag::*;
+
+pub mod classification;
+
+pub use classification::*;
