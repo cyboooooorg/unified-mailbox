@@ -3,7 +3,8 @@
 ## Project
 
 Unified Mailbox is a rewrite of Mailbot (`~/Developer/Cyboooooorg/mailbot`,
-Python): it sorts Gmail and Outlook mailboxes with Claude. The rewrite
+Python): it sorts Gmail and Outlook mailboxes with Claude. The rewrite adds
+Proton Mail, through Proton Mail Bridge, and generic IMAP mailboxes. It
 splits it into a headless Rust server that exposes an API, and clients that
 only talk to that API: a web app and iOS and Android apps from the same
 code. The server is reached over Tailscale.
@@ -25,6 +26,8 @@ server/                  # Cargo workspace
     application/         # use cases, one per action; depends on domain + ports
     adapters/
       gmail/ outlook/    # impl MailProvider
+      imap/              # impl MailProvider over IMAP: Proton Mail through
+                         # Proton Mail Bridge, any other IMAP mailbox
       claude-api/        # impl Classifier over HTTP (reqwest)
       claude-code/       # impl Classifier through the Claude Code CLI
       sqlite/            # impl the repositories (sqlx, migrations)
@@ -42,7 +45,7 @@ Rules:
 
 - `domain` depends on no I/O crate (no `sqlx`, `reqwest`, `tokio`,
   `axum`). `application` depends only on `domain` and `ports`. Only
-  adapters and `app` know SQLite, HTTP, Gmail, Graph or Anthropic.
+  adapters and `app` know SQLite, HTTP, Gmail, Graph, IMAP or Anthropic.
 - Configuration is read once in `app` and passed down as values
   (`SpamPolicy { threshold, archive }`), never read from a global.
 - The HTTP API has its own DTOs, converted in `http`. Never serialize a
@@ -133,7 +136,7 @@ Rules that follow from it:
   a conventional subject
   (`gh pr merge <n> --merge --subject "feat(server): … (#<n>)"`).
 - Scopes: `domain`, `app`, `http`, `api`, `sqlite`, `gmail`, `outlook`,
-  `claude`, `client`, `mobile`, `ci`, or none.
+  `imap`, `claude`, `client`, `mobile`, `ci`, or none.
 
 Worktrees for parallel work live next to the clone:
 `~/Developer/Cyboooooorg/um-<branch-name>`.
