@@ -275,6 +275,23 @@ mod tests {
     }
 
     #[test]
+    fn key_cut_landing_on_a_dash_is_trimmed() {
+        // Cut at 30 keeps "a…a-": the trailing dash must go.
+        let name = format!("{} x", "a".repeat(29));
+        assert_eq!(TagKey::derive(&name, &none).as_str(), "a".repeat(29));
+    }
+
+    #[test]
+    fn key_cut_for_suffix_landing_on_a_dash_is_trimmed() {
+        // Cut at 28 for "-2" keeps "b…b-": the dash must go before the suffix.
+        let name = format!("{} cc", "b".repeat(27));
+        let base = TagKey::derive(&name, &none);
+        assert_eq!(base.as_str(), format!("{}-cc", "b".repeat(27)));
+        let next = TagKey::derive(&name, &|k| k == base.as_str());
+        assert_eq!(next.as_str(), format!("{}-2", "b".repeat(27)));
+    }
+
+    #[test]
     fn stored_key_rejects_reserved_and_bad() {
         assert_eq!(TagKey::from_stored("unknown"), Err(TagError::ReservedKey));
         assert_eq!(TagKey::from_stored("Bad Key"), Err(TagError::InvalidKey));
