@@ -4,6 +4,7 @@ description = "Pure types and rules: no I/O, no global configuration"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [lints]
