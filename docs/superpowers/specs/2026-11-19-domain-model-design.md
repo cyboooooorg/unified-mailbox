@@ -60,7 +60,9 @@ Modules of the `domain` crate:
 - `mail`: `ProviderMailId`, `ThreadId`, `Location` (`Inbox`, `Archive`,
   `Junk`, `Trash`, `Sent`, `Folder(FolderPath)`), `FolderPath` (levels
   separated by `/`, no empty level), `MailMeta` (account, provider id,
-  thread, received at, sender address and name, recipients, subject,
+  thread, received at, sender address (`None` when the From header holds
+  no address that parses, common in spam) and name, recipients (those
+  that parse), subject,
   `dmarc_passed`, `is_read: Option<bool>`, `locked`, location).
 - `tag`:
   - `TagKey::derive(name, taken)`: NFKD, drop non-ASCII, lowercase, runs
@@ -68,7 +70,7 @@ Modules of the `domain` crate:
     becomes `tag`, collision appends `-2`, `-3`…; `unknown` is reserved.
     A key never changes after creation.
   - `TagName` (trimmed, 1 to 40 characters; uniqueness compares
-    case-folded names), `TagDescription` (1 to 500), `Color`
+    lowercased names, accents significant), `TagDescription` (1 to 500), `Color`
     (`#rrggbb`, stored lowercase).
   - `Tag { key, name, description, color }`; `spam` is protected: it can
     be renamed, not deleted (`Tag::can_delete`).
@@ -85,12 +87,13 @@ Modules of the `domain` crate:
 - `decision`: `SpamPolicy { threshold: SpamConfidence, archive:
   BTreeSet<TagKey> }` and a pure `decide(input) -> Option<Move>` where the
   input carries the classification, the mail location, and booleans the
-  caller computes through ports: `trusted`, `known_sender`, `locked`,
-  `thread_muted`, `protect_known_senders`. Rules, in order:
+  caller computes through ports: `trusted`, `known_sender`, `locked`;
+  `protect_known_senders` is part of the policy. Rules, in order:
   1. Locked: no move.
   2. In junk: `Inbox` (rescue) if trusted and DMARC passed, otherwise no
      move.
-  3. Thread muted and in the inbox: `Archive`.
+  3. Anywhere but the inbox: no move (as Mailbot, which only moves inbox
+     mails).
   4. Trusted: no move.
   5. Spam category, or phishing, with confidence at or above the
      threshold: `Junk`, unless `protect_known_senders` and the sender is
@@ -98,6 +101,11 @@ Modules of the `domain` crate:
   6. Category in the archive set: `Archive`.
   7. Otherwise no move.
   A refusal (no classification) is handled by the caller: no move.
+- Muted threads: `muted_thread_move(location, locked, thread_muted)`
+  archives a new inbox mail of a muted thread unless it is locked. It runs
+  before classification, so it needs no Claude call and applies to mails
+  Claude refused; as in Mailbot, it is the user's choice and applies even
+  in dry-run mode.
 - Errors: one `thiserror` enum per module, variants are codes with fields
   (`TagNameTooLong { max }`), no message meant for the user.
 

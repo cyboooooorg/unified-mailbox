@@ -89,8 +89,12 @@ pub struct MailMeta {
     pub provider_id: ProviderMailId,
     pub thread: Option<ThreadId>,
     pub received_at: DateTime<Utc>,
-    pub sender: EmailAddress,
+    /// `None` when the From header holds no address that parses, which is
+    /// common in spam: such a mail must still be sorted.
+    pub sender: Option<EmailAddress>,
     pub sender_name: Option<String>,
+    /// The recipient addresses that parse; group syntax such as
+    /// `undisclosed-recipients:;` yields none.
     pub recipients: Vec<EmailAddress>,
     pub subject: String,
     /// The sender's domain passed DMARC. A sender is "known" only then.
@@ -132,6 +136,25 @@ mod tests {
         assert_eq!(FolderPath::parse(""), Err(MailError::EmptyFolderPath));
         assert_eq!(FolderPath::parse("a//b"), Err(MailError::EmptyFolderLevel));
         assert_eq!(FolderPath::parse("a/ "), Err(MailError::EmptyFolderLevel));
+    }
+
+    #[test]
+    fn mail_without_a_parsable_sender_is_representable() {
+        let mail = MailMeta {
+            account: AccountId::new(1),
+            provider_id: ProviderMailId::new("m1").unwrap(),
+            thread: None,
+            received_at: DateTime::<Utc>::UNIX_EPOCH,
+            sender: None,
+            sender_name: Some("Totally Legit Bank".to_owned()),
+            recipients: Vec::new(),
+            subject: "You won".to_owned(),
+            dmarc_passed: false,
+            is_read: None,
+            locked: false,
+            location: Location::Inbox,
+        };
+        assert_eq!(mail.sender, None);
     }
 
     #[test]
