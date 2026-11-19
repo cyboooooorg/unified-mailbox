@@ -11,3 +11,7 @@ pub use account::*;
 pub mod mail;
 
 pub use mail::*;
+
+pub mod tag;
+
+pub use tag::*;
