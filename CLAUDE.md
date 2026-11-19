@@ -148,6 +148,21 @@ a theme label), not in a file.
 
 - A new backlog item, or a review remark left for later, becomes an issue
   (`gh issue create --label backlog`).
+- Plan every new issue in the roadmap when filing it, so none is forgotten
+  or goes stale outside the plan. The roadmap is #60; each phase is a
+  tracking issue (#2 to #8) whose sub-issues are its features.
+  - Add the issue as a sub-issue of the phase it belongs to, and to that
+    phase's `## Features` checklist:
+
+    ```bash
+    id=$(gh api repos/{owner}/{repo}/issues/<n> --jq .id)
+    gh api repos/{owner}/{repo}/issues/<phase>/sub_issues -F sub_issue_id="$id"
+    ```
+
+  - An issue that fits no phase yet goes under `## Later` in #60, with
+    what it waits for.
+  - An issue closed as not planned or as a duplicate leaves the phase's
+    checklist; one moved to another phase moves in both places.
 - A pull request that resolves an issue says so with a closing keyword, one
   per issue (`Closes #123`); one that only advances it writes `Refs #123`.
 - Comment on issues and pull requests whenever it helps the next reader:
