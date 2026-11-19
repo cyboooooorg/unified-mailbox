@@ -94,7 +94,8 @@ Modules of the `domain` crate:
      move.
   3. Anywhere but the inbox: no move (as Mailbot, which only moves inbox
      mails).
-  4. Trusted: no move.
+  4. Trusted and DMARC passed: no move. A trusted sender failing DMARC
+     is evaluated like any other (#24: the From may be spoofed).
   5. Spam category, or phishing, with confidence at or above the
      threshold: `Junk`, unless `protect_known_senders` and the sender is
      known with DMARC passed.

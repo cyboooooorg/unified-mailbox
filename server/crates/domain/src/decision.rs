@@ -31,7 +31,8 @@ pub struct DecisionInput<'a> {
     pub dmarc_passed: bool,
     /// Locked by the user: never moved.
     pub locked: bool,
-    /// The sender matches a trusted address or domain.
+    /// The sender matches a trusted address or domain. It only counts
+    /// when the mail passed DMARC.
     pub trusted: bool,
     /// The user wrote to the sender, rescued or corrected one of its mails,
     /// or received enough legitimate authenticated mails from it.
@@ -56,7 +57,9 @@ pub fn muted_thread_move(location: &Location, locked: bool, thread_muted: bool) 
 ///    passed DMARC; otherwise it stays.
 /// 3. A mail anywhere else but the inbox (archive, trash, sent, a user
 ///    folder) is not moved: it is where the user put it.
-/// 4. A trusted sender's mail is not moved.
+/// 4. A trusted sender's mail that passed DMARC is not moved. Without
+///    DMARC the From may be spoofed, so the mail is evaluated like any
+///    other.
 /// 5. Spam, or phishing, at or above the threshold goes to junk, unless
 ///    the policy protects known senders and this one is known and passed
 ///    DMARC.
@@ -73,7 +76,7 @@ pub fn decide(input: &DecisionInput<'_>, policy: &SpamPolicy) -> Option<Move> {
     if *input.location == Location::Junk {
         return (input.trusted && input.dmarc_passed).then_some(Move::Inbox);
     }
-    if *input.location != Location::Inbox || input.trusted {
+    if *input.location != Location::Inbox || (input.trusted && input.dmarc_passed) {
         return None;
     }
     let suspicious = classification.category.is_tag(SPAM_KEY) || classification.is_phishing;
@@ -237,10 +240,18 @@ mod tests {
     }
 
     #[test]
-    fn trusted_sender_is_not_moved() {
+    fn trusted_authenticated_sender_is_not_moved() {
+        let mut f = fixture().spam(100);
+        (f.trusted, f.dmarc_passed) = (true, true);
+        assert_eq!(f.decide(), None);
+    }
+
+    #[test]
+    fn trusted_sender_failing_dmarc_is_evaluated() {
+        // A spoofed From on a trusted domain gets no free pass.
         let mut f = fixture().spam(100);
         f.trusted = true;
-        assert_eq!(f.decide(), None);
+        assert_eq!(f.decide(), Some(Move::Junk));
     }
 
     #[test]
