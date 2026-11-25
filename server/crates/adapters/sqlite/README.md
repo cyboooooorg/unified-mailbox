@@ -28,7 +28,11 @@ environment variable.
   the server's own writes never compete for the lock, and a read pool
   with `PRAGMA query_only = ON`.
 - Every connection: `journal_mode = WAL`, `synchronous = NORMAL`,
-  `foreign_keys = ON`, `busy_timeout` of 5 seconds.
+  `foreign_keys = ON`, `recursive_triggers = ON`, `busy_timeout` of 5
+  seconds.
+- Never `INSERT OR REPLACE` into `accounts`: the replaced row gets a new
+  id and its mails, muted threads and sync state go with it by cascade.
+  Use `INSERT … ON CONFLICT … DO UPDATE` instead, everywhere.
 - The database file is created with mode `0600`; SQLite gives the
   `-wal` and `-shm` files the same mode. An existing file keeps its mode.
 - `Store::close` runs `PRAGMA optimize`, then closes both pools.
@@ -42,6 +46,8 @@ environment variable.
   file. A migration that is not purely additive carries its data
   migration in the same file.
 - Each phase adds the tables it needs with its own migration.
+- `build.rs` makes cargo rebuild the crate when a migration file is
+  added, since `sqlx::migrate!` does not watch the directory on stable.
 
 ## Stored values
 
@@ -61,7 +67,8 @@ environment variable.
   reverse.
 - External content: the text is stored once, in `mails`. Triggers on
   insert, delete and update of those columns keep the index in step, so
-  no code path has to, and a cascade from `accounts` cleans it too.
+  no code path has to. A cascade from `accounts` cleans it too, and so
+  does a row replaced by `OR REPLACE` (through `recursive_triggers`).
 - Query it with `SELECT rowid FROM mails_fts WHERE mails_fts MATCH ?`;
   the rowid is `mails.id`.
 

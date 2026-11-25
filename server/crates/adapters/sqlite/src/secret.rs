@@ -193,11 +193,13 @@ mod tests {
     #[test]
     fn group_readable_key_is_refused() {
         let dir = TempDir::new().unwrap();
-        let path = write_key(&dir, "k", 32, 0o640);
-        match load_or_create_key(&path) {
-            Err(KeyFileError::TooOpen { mode, .. }) => assert_eq!(mode, 0o640),
-            Err(other) => panic!("{other:?}"),
-            Ok(_) => panic!("accepted"),
+        for open in [0o640, 0o604, 0o602, 0o660, 0o644] {
+            let path = write_key(&dir, &format!("k{open:o}"), 32, open);
+            match load_or_create_key(&path) {
+                Err(KeyFileError::TooOpen { mode, .. }) => assert_eq!(mode, open),
+                Err(other) => panic!("{open:o}: {other:?}"),
+                Ok(_) => panic!("{open:o}: accepted"),
+            }
         }
     }
 
@@ -253,7 +255,7 @@ mod tests {
         wrong_version[0] = 2;
         let mut flipped = good.clone();
         *flipped.last_mut().unwrap() ^= 1;
-        for bad in [vec![], vec![1u8; 24], wrong_version, flipped] {
+        for bad in [vec![], vec![1u8; 24], vec![1u8; 25], wrong_version, flipped] {
             assert_eq!(decrypt(&k, 7, &bad), Err(SecretError::Undecryptable));
         }
     }

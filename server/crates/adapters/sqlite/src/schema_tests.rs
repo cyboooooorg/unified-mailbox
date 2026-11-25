@@ -294,3 +294,162 @@ async fn lowercase_addresses_enforced() {
     assert!(exec(w, &trusted("@Example.com")).await.is_err());
     exec(w, &trusted("@example.com")).await.unwrap();
 }
+
+#[tokio::test]
+async fn every_settled_code_is_accepted() {
+    let (store, _dir) = test_store().await;
+    let w = store.write();
+    let a = account(w, "gmail", "alice@example.com").await.unwrap();
+    for location in ["inbox", "archive", "junk", "trash", "sent"] {
+        let code = format!("'{location}'");
+        mail(w, a, &[("location", &code)]).await.unwrap();
+        exec(
+            w,
+            &format!(
+                "INSERT INTO sync_state (account_id, location, days) VALUES ({a}, '{location}', 90)"
+            ),
+        )
+        .await
+        .unwrap();
+    }
+    for source in ["inbox", "junk"] {
+        mail(w, a, &[("source", &format!("'{source}'"))])
+            .await
+            .unwrap();
+    }
+    for review in ["rescued", "confirmed"] {
+        mail(
+            w,
+            a,
+            &[("review", &format!("'{review}'")), ("review_at", AT)],
+        )
+        .await
+        .unwrap();
+    }
+    for billing in ["api", "batch", "subscription"] {
+        mail(w, a, &[("billing", &format!("'{billing}'"))])
+            .await
+            .unwrap();
+    }
+    for actor in ["user", "device", "system", "claude", "rule"] {
+        exec(
+            w,
+            &format!("INSERT INTO audit (at, actor, resource, action) VALUES ({AT}, '{actor}', 'mail', 'moved')"),
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn booleans_are_zero_or_one() {
+    let (store, _dir) = test_store().await;
+    let w = store.write();
+    let a = account(w, "gmail", "alice@example.com").await.unwrap();
+    for column in [
+        "dmarc_passed",
+        "locked",
+        "locked_remote",
+        "needs_reply",
+        "is_phishing",
+        "is_read",
+    ] {
+        mail(w, a, &[(column, "1")]).await.unwrap();
+        assert!(mail(w, a, &[(column, "2")]).await.is_err(), "{column}");
+    }
+}
+
+#[tokio::test]
+async fn audit_codes_are_not_empty() {
+    let (store, _dir) = test_store().await;
+    let w = store.write();
+    let audit = |resource: &str, action: &str| {
+        format!(
+            "INSERT INTO audit (at, actor, resource, action) VALUES ({AT}, 'user', '{resource}', '{action}')"
+        )
+    };
+    assert!(exec(w, &audit("", "moved")).await.is_err());
+    assert!(exec(w, &audit("mail", "")).await.is_err());
+}
+
+#[tokio::test]
+async fn keys_reject_null_and_duplicates() {
+    let (store, _dir) = test_store().await;
+    let w = store.write();
+    let a = account(w, "gmail", "alice@example.com").await.unwrap();
+    let tag = |key: &str, folded: &str| {
+        format!(
+            "INSERT INTO tags (key, name, name_folded, description, color, created_at) \
+             VALUES ({key}, 'Name', '{folded}', 'A tag', '#868e96', {AT})"
+        )
+    };
+    assert!(exec(w, &tag("NULL", "n1")).await.is_err());
+    exec(w, &tag("'work'", "work")).await.unwrap();
+    assert!(exec(w, &tag("'work'", "work-other")).await.is_err());
+
+    let trusted =
+        |p: &str| format!("INSERT INTO trusted_senders (pattern, created_at) VALUES ({p}, {AT})");
+    assert!(exec(w, &trusted("NULL")).await.is_err());
+    exec(w, &trusted("'@example.com'")).await.unwrap();
+    assert!(exec(w, &trusted("'@example.com'")).await.is_err());
+
+    let muted = |thread: &str| {
+        format!(
+            "INSERT INTO muted_threads (account_id, thread_id, created_at) VALUES ({a}, '{thread}', {AT})"
+        )
+    };
+    exec(w, &muted("t1")).await.unwrap();
+    exec(w, &muted("t2")).await.unwrap();
+    assert!(exec(w, &muted("t1")).await.is_err());
+
+    let sync = |path: &str| {
+        format!(
+            "INSERT INTO sync_state (account_id, location, folder_path, days) VALUES ({a}, 'folder', '{path}', 90)"
+        )
+    };
+    exec(w, &sync("Clients")).await.unwrap();
+    exec(w, &sync("Other")).await.unwrap();
+}
+
+#[tokio::test]
+async fn folder_location_needs_a_path() {
+    let (store, _dir) = test_store().await;
+    let w = store.write();
+    let a = account(w, "gmail", "alice@example.com").await.unwrap();
+    assert!(
+        mail(w, a, &[("location", "'folder'"), ("folder_path", "''")])
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn tag_color_is_six_hex_digits() {
+    let (store, _dir) = test_store().await;
+    let w = store.write();
+    let tag = |key: &str, color: &str| {
+        format!(
+            "INSERT INTO tags (key, name, name_folded, description, color, created_at) \
+             VALUES ('{key}', '{key}', '{key}', 'A tag', '{color}', {AT})"
+        )
+    };
+    assert!(exec(w, &tag("five", "#abcde")).await.is_err());
+    assert!(exec(w, &tag("seven", "#abcdef0")).await.is_err());
+}
+
+#[tokio::test]
+async fn timestamps_are_required() {
+    let (store, _dir) = test_store().await;
+    let w = store.write();
+    let a = account(w, "gmail", "alice@example.com").await.unwrap();
+    assert!(mail(w, a, &[("received_at", "NULL")]).await.is_err());
+    assert!(
+        exec(
+            w,
+            "INSERT INTO tags (key, name, name_folded, description, color, created_at) \
+             VALUES ('k', 'k', 'k', 'A tag', '#868e96', NULL)"
+        )
+        .await
+        .is_err()
+    );
+}

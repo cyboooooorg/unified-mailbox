@@ -36,6 +36,12 @@ mise install
 
 To be written with the first server code.
 
+### Data files
+
+The server keeps its state in one SQLite database (with its `-wal` and
+`-shm` files beside it), created with mode `0600` at the first start.
+Its path comes from the configuration (#12).
+
 ### Secret key
 
 The OAuth tokens and IMAP passwords of the connected accounts are

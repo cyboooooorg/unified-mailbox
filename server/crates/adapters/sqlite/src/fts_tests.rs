@@ -155,3 +155,24 @@ async fn every_indexed_column_is_searchable() {
     }
     integrity_check(w).await;
 }
+
+#[tokio::test]
+async fn insert_or_replace_keeps_the_index() {
+    let (store, _dir) = test_store().await;
+    let w = store.write();
+    let a = account(w).await;
+    mail(w, a, &[("provider_id", "'same'"), ("subject", "'Facture'")])
+        .await
+        .unwrap();
+    exec(
+        w,
+        &format!(
+            "INSERT OR REPLACE INTO mails (account_id, provider_id, received_at, location, source, subject) \
+             VALUES ({a}, 'same', '2026-11-25T08:30:00.000Z', 'inbox', 'inbox', 'Relance')"
+        ),
+    )
+    .await;
+    assert!(search(w, "facture").await.is_empty());
+    assert_eq!(search(w, "relance").await.len(), 1);
+    integrity_check(w).await;
+}

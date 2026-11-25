@@ -12,7 +12,12 @@ pub fn to_db(t: DateTime<Utc>) -> String {
 
 /// Parses a stored timestamp; `None` for any other format.
 pub fn from_db(s: &str) -> Option<DateTime<Utc>> {
-    if s.len() != "2026-11-25T08:30:00.000Z".len() || !s.ends_with('Z') {
+    let b = s.as_bytes();
+    if b.len() != "2026-11-25T08:30:00.000Z".len()
+        || b[10] != b'T'
+        || b[19] != b'.'
+        || b[23] != b'Z'
+    {
         return None;
     }
     DateTime::parse_from_rfc3339(s)
@@ -44,6 +49,16 @@ mod tests {
 
     #[test]
     fn time_rejects_other_formats() {
-        assert_eq!(from_db("2026-11-25 08:30"), None);
+        for other in [
+            "2026-11-25 08:30",
+            "2026-11-25 08:30:00.000Z",
+            "2026-11-25t08:30:00.000Z",
+            "2026-11-25T08:30:00Z",
+            "2026-11-25T08:30:00.1Z",
+            "2026-11-25T08:30:00.123456Z",
+            "2026-11-25T08:30:00.123+00:00",
+        ] {
+            assert_eq!(from_db(other), None, "{other}");
+        }
     }
 }

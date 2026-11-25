@@ -16,7 +16,7 @@ CREATE TABLE accounts (
 
 CREATE TABLE tags (
     -- Stable key derived once from the name (domain `TagKey`).
-    key TEXT PRIMARY KEY,
+    key TEXT NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,
     -- The name lowercased by the code, accents kept: the uniqueness rule.
     -- SQLite's lower() and NOCASE fold ASCII only.
@@ -78,7 +78,8 @@ CREATE TABLE mails (
     billing TEXT CHECK (billing IN ('api', 'batch', 'subscription')),
 
     UNIQUE (account_id, provider_id),
-    CHECK ((location = 'folder') = (folder_path IS NOT NULL)),
+    CHECK ((location = 'folder') = (folder_path IS NOT NULL AND folder_path <> '')),
+    CHECK (folder_path IS NULL OR folder_path <> ''),
     CHECK ((review IS NULL) = (review_at IS NULL))
 );
 
@@ -92,7 +93,7 @@ CREATE INDEX mails_category ON mails (category);
 
 CREATE TABLE trusted_senders (
     -- An address or a domain, stored lowercased by the code.
-    pattern TEXT PRIMARY KEY CHECK (pattern = lower(pattern)),
+    pattern TEXT NOT NULL PRIMARY KEY CHECK (pattern = lower(pattern)),
     created_at TEXT NOT NULL
 );
 

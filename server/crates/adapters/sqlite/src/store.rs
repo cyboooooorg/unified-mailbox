@@ -55,7 +55,11 @@ impl Store {
             .journal_mode(SqliteJournalMode::Wal)
             .synchronous(SqliteSynchronous::Normal)
             .foreign_keys(true)
-            .busy_timeout(BUSY_TIMEOUT);
+            .busy_timeout(BUSY_TIMEOUT)
+            // A row deleted by an `OR REPLACE` conflict fires the delete
+            // triggers only with this on: without it the search index
+            // keeps the replaced mail.
+            .pragma("recursive_triggers", "ON");
         let write = SqlitePoolOptions::new()
             .max_connections(1)
             .connect_with(options.clone())
@@ -185,6 +189,7 @@ mod tests {
     #[tokio::test]
     async fn pragmas() {
         let (store, _dir) = test_store().await;
+        assert_eq!(store.write().options().get_max_connections(), 1);
         for pool in [store.write(), store.read()] {
             let journal: String = sqlx::query_scalar("PRAGMA journal_mode")
                 .fetch_one(pool)
