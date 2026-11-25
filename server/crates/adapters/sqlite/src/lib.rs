@@ -3,5 +3,8 @@
 //! them.
 
 mod secret;
+mod store;
+pub mod time;
 
 pub use secret::{KeyFileError, SecretError, SecretKey, decrypt, encrypt, load_or_create_key};
+pub use store::{Store, StoreConfig, StoreError};
