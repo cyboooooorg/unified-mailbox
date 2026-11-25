@@ -8,7 +8,7 @@ tools: Read, Grep, Glob, Bash
 
 You review a whole branch (`git diff origin/main...<branch>`) against its
 spec and plan. You do not edit files. You may run the checks
-(`cargo clippy`, `cargo test`, `npm run check`) once.
+(`mise run ci`, `npm run check`) once.
 
 Report only findings you can point at with `path:line` and a concrete
 failure scenario. Rank them by severity. Say plainly when you found
