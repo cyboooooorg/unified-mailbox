@@ -1,6 +1,9 @@
 # SQLite Adapter Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps
+> use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A `sqlite` adapter crate that opens the database with its
 settings, runs the phase 1 migration (schema, constraints, full-text
@@ -43,11 +46,13 @@ repository yet.
 - Test data is invented (`alice@example.com`), databases live in a
   `tempfile::TempDir`.
 - Error variants are codes with fields, no user-facing sentence.
-- `mise run ci` passes after every task (until #69 is merged into this
-  branch, run its three commands from `server/`: `cargo fmt --all
-  --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-  `cargo test --workspace`). Commits: Conventional Commits,
-  scope `sqlite`, footer `Refs: #11`, final task `Closes: #11`.
+- `mise run ci` passes after every task. Commits: Conventional Commits,
+  scope `sqlite`, footer `Refs: #11` (final task `Closes: #11`), then
+  the `Co-Authored-By:` trailer the session requires.
+- Unix only (the server runs on Linux): file modes use
+  `std::os::unix::fs::{OpenOptionsExt, PermissionsExt}`, and every mode
+  compared or reported is `mode & 0o777` (metadata also carries the file
+  type bits).
 
 ## Review Focus
 
@@ -79,9 +84,10 @@ repository yet.
   `rt-multi-thread`)
 - Create: `server/crates/adapters/sqlite/src/lib.rs`
 - Create: `server/crates/adapters/sqlite/src/secret.rs`
-- Modify: `README.md` (a "Secret key" section: where the key file lives,
-  back it up apart from the database, losing it means reconnecting every
-  account)
+- Modify: `README.md` (a "Secret key" section: the key file's path comes
+  from the configuration (#12), it is generated at first start, it must
+  be backed up apart from the database, losing it means reconnecting
+  every account)
 
 **Interfaces:**
 
@@ -134,9 +140,13 @@ repository yet.
   32 bytes with `getrandom::fill`, `sync_all`, then logs
   `tracing::warn!(path = %path.display(), "generated a new secret key")`
   (never the bytes). Checks on an existing file: length first, then
-  `mode & 0o077 != 0` → `TooOpen`. Cipher: `XChaCha20Poly1305` with
-  `Payload { msg, aad: &account_id.to_le_bytes() }`; check length ≥ 25
-  and the version byte before slicing. Re-export the public items from
+  `mode & 0o077 != 0` → `TooOpen`. A missing file is detected by
+  `NotFound` on `metadata`; any other I/O error, and a failed creation
+  (missing directory), is `Io` with the path. Cipher:
+  `XChaCha20Poly1305` with
+  `Payload { msg, aad: &account_id.to_le_bytes() }`, nonce of 24 bytes
+  from `getrandom::fill`; check length ≥ 25 and the version byte before
+  slicing. Re-export the public items from
   `lib.rs`. Add the README section.
 
 - [ ] **Step 4: Run the tests and the checks**
@@ -189,6 +199,7 @@ repository yet.
         Migrate(sqlx::migrate::MigrateError),
     }
     ```
+
   - `time.rs`: `pub fn to_db(t: DateTime<Utc>) -> String` and
     `pub fn from_db(s: &str) -> Option<DateTime<Utc>>`.
   - A test helper reused by Tasks 3 and 4:
@@ -217,7 +228,7 @@ repository yet.
 
 - [ ] **Step 2: Run them to verify they fail**
 
-  Run: `cd server && cargo test -p sqlite store time`
+  Run: `cd server && cargo test -p sqlite -- store time`
   Expected: compile errors.
 
 - [ ] **Step 3: Implement.** In `open`: load the key first; create the
@@ -226,11 +237,14 @@ repository yet.
   `synchronous(Normal)`, `foreign_keys(true)`,
   `busy_timeout(5 s)`; write pool `max_connections(1)`; run
   `sqlx::migrate!("./migrations")` on it; read pool from the same
-  options plus `.pragma("query_only", "ON")`. `close` runs
+  options plus `.pragma("query_only", "ON")` (`journal_mode` is stored
+  in the file: if setting it on a `query_only` connection fails, leave it
+  out of the read options, the `pragmas` test still holds). `close` runs
   `PRAGMA optimize` on the write pool, then closes both. `accounts` in
   `0001_initial.sql`: columns and `UNIQUE(provider, email)` from the
-  spec, `credentials BLOB` nullable, `CHECK (provider IN
-  ('gmail','outlook','imap'))`, `CHECK (email = lower(email))`.
+  spec, `credentials BLOB` nullable, `created_at NOT NULL`, the others
+  nullable, `CHECK (provider IN ('gmail','outlook','imap'))`,
+  `CHECK (email = lower(email))`.
 
 - [ ] **Step 4: Run the tests and the checks**
 
@@ -258,6 +272,14 @@ repository yet.
 - Produces: tables `tags`, `mails`, `trusted_senders`, `muted_threads`,
   `sync_state`, `audit`, with the columns, nullability and indexes of the
   spec. Exact choices the spec leaves open:
+  - Every column the spec does not call nullable is `NOT NULL`: in
+    `mails`, `account_id`, `provider_id`, `received_at`, `location`,
+    `source`, the booleans and the token counts; `body` is nullable
+    (not fetched yet).
+  - `tags`: `name`, `name_folded`, `description`, `color`, `created_at`
+    `NOT NULL`; `CHECK (color GLOB '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]')`.
+  - `trusted_senders`: `CHECK (pattern = lower(pattern))`, as
+    `accounts.email`.
   - `mails.category`, `priority`, `summary`, `reason`, `classified_at`,
     `model`, `billing`: nullable; `input_tokens`, `output_tokens`:
     `NOT NULL DEFAULT 0`; booleans `NOT NULL DEFAULT 0` with
@@ -280,13 +302,15 @@ repository yet.
     `"yahoo"` is rejected.
   - `every_priority_code_is_accepted`: same with `Priority::as_code()`.
   - `unknown_codes_are_rejected`: one bad value each for location,
-    source, review, billing, audit actor.
+    source, review, billing, audit actor; tag color `red` and `#ABCDEF`
+    rejected, `#abcdef` accepted.
   - `folder_path_only_with_folder_location`: `location = 'inbox'` with a
     path rejected; `'folder'` without a path rejected; `'folder'` with
     `Clients/Acme` accepted. Same pair for `sync_state`.
   - `review_and_review_at_go_together`.
   - `spam_confidence_bounds`: 0 and 100 accepted, -1 and 101 rejected.
-  - `body_cut_enforced`: 50,000 characters accepted, 50,001 rejected.
+  - `body_cut_enforced`: 50,000 `é` accepted (characters, not bytes),
+    50,001 rejected.
   - `duplicate_provider_id_rejected`: same `(account_id, provider_id)`
     twice.
   - `spam_without_sender_or_message_key`: `sender`, `message_key`,
@@ -356,8 +380,9 @@ repository yet.
     `sender_name`, `summary` `NULL` matches by subject; deleting it
     leaves no match (the `'delete'` command with `NULL`s).
   - `integrity_check_passes`: after the operations above,
-    `INSERT INTO mails_fts(mails_fts) VALUES('integrity-check')`
-    succeeds.
+    `INSERT INTO mails_fts(mails_fts, rank) VALUES('integrity-check', 1)`
+    succeeds (`rank = 1` also compares the index with the `mails`
+    rows).
 
 - [ ] **Step 2: Run them to verify they fail**
 
