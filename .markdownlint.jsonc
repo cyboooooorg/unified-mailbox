@@ -1,0 +1,5 @@
+// markdownlint defaults, except that tables and code blocks may exceed
+// the line length (a table row cannot be wrapped).
+{
+  "MD013": { "tables": false, "code_blocks": false }
+}
