@@ -15,9 +15,6 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
     steps:
       - uses: actions/checkout@v7
       # Installs the Rust toolchain pinned in mise.toml.
@@ -25,9 +22,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: server
-      - name: Format
-        run: cargo fmt --all --check
-      - name: Lint
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Test
-        run: cargo test --workspace --locked
+      # Same task as locally: format, lint and test (see mise.toml).
+      - name: Checks
+        run: mise run ci

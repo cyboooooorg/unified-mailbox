@@ -26,12 +26,8 @@ unverified until the checks pass.
 
 ## Checks after each merge
 
-From `server/`:
-
 ```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+mise run ci
 ```
 
 From `client/`, when it exists and the branch touches it or the API:

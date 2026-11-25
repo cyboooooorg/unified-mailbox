@@ -43,12 +43,11 @@ Rust toolchain pinned in `mise.toml`, with `clippy` and `rustfmt`; the
 workspace declares the same version as its `rust-version`. Raise both
 together.
 
-Run the checks from `server/`, as the CI does on every pull request:
+Run the checks as the CI does on every pull request (format, clippy and
+tests, defined in `mise.toml`):
 
 ```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+mise run ci
 ```
 
 The hexagonal layering is enforced by the crate graph and checked by
