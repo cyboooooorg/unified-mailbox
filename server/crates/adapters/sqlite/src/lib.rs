@@ -2,6 +2,8 @@
 //! account secrets. Repositories are added with the use cases that need
 //! them.
 
+#[cfg(test)]
+mod schema_tests;
 mod secret;
 mod store;
 pub mod time;
