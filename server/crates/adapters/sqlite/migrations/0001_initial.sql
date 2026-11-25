@@ -135,3 +135,35 @@ CREATE INDEX audit_at ON audit (at);
 CREATE INDEX audit_resource ON audit (resource, resource_id);
 CREATE INDEX audit_actor ON audit (actor, actor_id);
 CREATE INDEX audit_action ON audit (action);
+
+-- Full-text search over mails, accent-insensitive. External content: the
+-- text stays in `mails` only, and the triggers keep the index in step on
+-- every write, cascades included.
+CREATE VIRTUAL TABLE mails_fts USING fts5 (
+    subject,
+    sender,
+    sender_name,
+    body,
+    summary,
+    content = 'mails',
+    content_rowid = 'id',
+    tokenize = 'unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER mails_fts_insert AFTER INSERT ON mails BEGIN
+    INSERT INTO mails_fts (rowid, subject, sender, sender_name, body, summary)
+    VALUES (new.id, new.subject, new.sender, new.sender_name, new.body, new.summary);
+END;
+
+CREATE TRIGGER mails_fts_delete AFTER DELETE ON mails BEGIN
+    INSERT INTO mails_fts (mails_fts, rowid, subject, sender, sender_name, body, summary)
+    VALUES ('delete', old.id, old.subject, old.sender, old.sender_name, old.body, old.summary);
+END;
+
+CREATE TRIGGER mails_fts_update
+AFTER UPDATE OF subject, sender, sender_name, body, summary ON mails BEGIN
+    INSERT INTO mails_fts (mails_fts, rowid, subject, sender, sender_name, body, summary)
+    VALUES ('delete', old.id, old.subject, old.sender, old.sender_name, old.body, old.summary);
+    INSERT INTO mails_fts (rowid, subject, sender, sender_name, body, summary)
+    VALUES (new.id, new.subject, new.sender, new.sender_name, new.body, new.summary);
+END;

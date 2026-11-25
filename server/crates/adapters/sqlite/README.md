@@ -53,6 +53,18 @@ environment variable.
   `CHECK` constraints. Lists: JSON arrays in TEXT.
 - No user-facing text: errors and audit entries hold codes.
 
+## Search
+
+- `mails_fts` is an FTS5 index over the `subject`, `sender`,
+  `sender_name`, `body` and `summary` of `mails`, with the `unicode61`
+  tokenizer and `remove_diacritics 2`: `equipe` finds `Équipe` and the
+  reverse.
+- External content: the text is stored once, in `mails`. Triggers on
+  insert, delete and update of those columns keep the index in step, so
+  no code path has to, and a cascade from `accounts` cleans it too.
+- Query it with `SELECT rowid FROM mails_fts WHERE mails_fts MATCH ?`;
+  the rowid is `mails.id`.
+
 ## Account secrets
 
 - Each secret is stored as `[version 1][24-byte nonce][ciphertext]`,

@@ -3,6 +3,8 @@
 //! them.
 
 #[cfg(test)]
+mod fts_tests;
+#[cfg(test)]
 mod schema_tests;
 mod secret;
 mod store;
