@@ -80,16 +80,25 @@ them.
 
 ## Checks
 
-Server, from `server/`:
+`mise run ci` runs what the pipeline runs (server format, clippy and
+tests, defined in `mise.toml`): run it before every pull request, from
+anywhere in the repository. The client adds `npm run check` and
+`npm test`, from `client/`, once it exists. Tools are pinned in
+`mise.toml`.
 
-```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-```
+## Tests
 
-Client, from `client/`, once it exists: `npm run check` and `npm test`.
-Tools are pinned in `mise.toml`.
+- Expected behavior comes from Mailbot's code and tests (through
+  `legacy-reader`) or from the spec, never from the code's current
+  output. A ported rule keeps Mailbot's edge cases as test cases; a
+  deliberate deviation is written in the spec before it is tested.
+- A test must fail when the code it covers is removed or broken. A
+  branch that adds a guard, a trim or a fallback adds the case that
+  reaches it.
+- Test data is invented: no real address, mail, token or name (the
+  repository is public).
+- No test talks to a real provider, Claude or the network: adapters are
+  tested against fakes or recorded, invented responses.
 
 ## Branches and pull requests
 
@@ -118,6 +127,21 @@ the pull requests being tried, rebuilt from `main` at every cycle.
    git fetch origin
    git push --force-with-lease origin origin/main:develop
    ```
+
+Before opening a pull request, at the end of the branch:
+
+1. Run `mise run ci`.
+2. Run the end-of-branch agents in parallel, each given the branch and
+   its spec or plan, not your conclusions:
+   - `branch-reviewer`, always;
+   - `test-reviewer`, when the branch adds or changes tests;
+   - `issue-auditor`, always, last, given the other reports and the
+     draft PR text too.
+3. Fix the findings on the branch, then re-run `mise run ci` (not a new
+   review, unless a fix changes the design). File the issues the audit
+   found missing (`issue-writer`), post its comments, put its closing
+   keywords in the PR text.
+4. Then open the pull request (`pr-shepherd`).
 
 Rules that follow from it:
 
@@ -182,6 +206,8 @@ agents:
 | `contract-checker` | Regenerate the OpenAPI contract, check the client | sonnet, low |
 | `branch-syncer` | Merge `main` into open branches and run the checks | sonnet, medium |
 | `branch-reviewer` | Review a whole branch before its PR (read-only) | opus, high |
+| `test-reviewer` | Check a branch's tests: sources, reach, duplicates | sonnet, medium |
+| `issue-auditor` | Check no issue was forgotten before a PR (read-only) | sonnet, medium |
 | `develop-rebuilder` | Rebuild `develop` from `main` with the listed PRs | sonnet, low |
 | `pr-shepherd` | Push, open the PR, watch CI, merge when approved | sonnet, low |
 | `issue-writer` | File a backlog issue from a review remark | sonnet, medium |
@@ -218,9 +244,10 @@ When a plan is executed with subagents:
 
 - implementers run on sonnet; opus only for a task the plan marks as hard
   (concurrency, OAuth, sync reconciliation, security);
-- no review subagent after each task: the implementer runs the checks, and
-  `branch-reviewer` reviews the whole branch once, before the PR;
-- after a fix following that review, re-run the checks, not a new full
+- no review subagent after each task: the implementer runs
+  `mise run ci`, and the end-of-branch agents (Branches and pull
+  requests) review the whole branch once, before the PR;
+- after a fix following that review, re-run `mise run ci`, not a new full
   review, unless the fix changes the design;
 - recon goes to `codebase-mapper` (this repository) or `legacy-reader`
   (Mailbot), never to `Explore` or `general-purpose`.
