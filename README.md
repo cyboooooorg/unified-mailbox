@@ -36,6 +36,20 @@ mise install
 
 To be written with the first server code.
 
+### Secret key
+
+The OAuth tokens and IMAP passwords of the connected accounts are
+encrypted in the database with a 32-byte key kept in its own file. Its
+path comes from the configuration (#12).
+
+- The server creates the file at its first start, with mode `0600`, and
+  logs that it did. It refuses to start if the file exists with another
+  length, or readable by group or others.
+- Back the key file up apart from the database: a copy of the database
+  alone does not expose the secrets, and the two together do.
+- Losing the key does not lose the mail index, but every account must be
+  connected again.
+
 ## Development
 
 The server is a Cargo workspace in `server/`. `mise install` installs the
