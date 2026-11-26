@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use application::{
-    AuthenticateDevice, CreatePairingCode, Deps, GetJob, ListActiveJobs, ListDevices, PairDevice,
-    RevokeDevice, SubscribeEvents,
+    AuthenticateDevice, CreatePairingCode, Deps, DeviceIsActive, GetJob, ListActiveJobs,
+    ListDevices, PairDevice, RevokeDevice, SubscribeEvents,
 };
 
 /// The use cases the routes call, built once in `app`.
@@ -14,6 +14,7 @@ pub struct AppState {
     pub authenticate_device: Arc<AuthenticateDevice>,
     pub list_devices: Arc<ListDevices>,
     pub revoke_device: Arc<RevokeDevice>,
+    pub device_is_active: Arc<DeviceIsActive>,
     pub get_job: Arc<GetJob>,
     pub list_active_jobs: Arc<ListActiveJobs>,
     pub subscribe_events: Arc<SubscribeEvents>,
@@ -31,6 +32,7 @@ impl AppState {
             authenticate_device: Arc::new(AuthenticateDevice::new(deps.clone())),
             list_devices: Arc::new(ListDevices::new(deps.clone())),
             revoke_device: Arc::new(RevokeDevice::new(deps.clone())),
+            device_is_active: Arc::new(DeviceIsActive::new(deps.clone())),
             get_job: Arc::new(GetJob::new(deps.clone())),
             list_active_jobs: Arc::new(ListActiveJobs::new(deps.clone())),
             subscribe_events: Arc::new(SubscribeEvents::new(deps)),

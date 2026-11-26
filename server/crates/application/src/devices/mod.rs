@@ -5,6 +5,7 @@ use crate::Deps;
 
 mod authenticate_device;
 mod create_pairing_code;
+mod device_is_active;
 mod list_devices;
 mod pair_device;
 mod revoke_device;
@@ -12,6 +13,7 @@ mod token;
 
 pub use authenticate_device::*;
 pub use create_pairing_code::*;
+pub use device_is_active::*;
 pub use list_devices::*;
 pub use pair_device::*;
 pub use revoke_device::*;
@@ -269,6 +271,20 @@ mod tests {
         let listed = ListDevices::new(f.deps.clone()).execute().await.unwrap();
         let ids: Vec<_> = listed.iter().map(|d| d.id).collect();
         assert_eq!(ids, vec![second.device.id]);
+    }
+
+    #[tokio::test]
+    async fn device_is_active_only_while_paired_and_not_revoked() {
+        let f = fixture();
+        let first = f.pair_new("Phone").await;
+        let second = f.pair_new("Tablet").await;
+        f.revoke(first.device.id).await;
+        let is_active = DeviceIsActive::new(f.deps.clone());
+        assert!(is_active.execute(second.device.id).await.unwrap());
+        assert!(!is_active.execute(first.device.id).await.unwrap());
+        assert!(!is_active.execute(DeviceId::new(999)).await.unwrap());
+        f.repo.fail_reads(true);
+        assert!(is_active.execute(second.device.id).await.is_err());
     }
 
     #[tokio::test]

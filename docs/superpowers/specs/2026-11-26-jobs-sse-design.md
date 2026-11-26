@@ -76,7 +76,8 @@ Deliberate deviations:
 - Progress is published whatever the total; the client decides not to
   show a toast for a single mail.
 - A subscriber that falls behind receives a `resync` event instead of
-  losing events silently.
+  losing events silently, then its stream ends: the client reconnects
+  and reloads.
 - The stream requires the bearer token, and ends as soon as its device
   is revoked.
 
@@ -157,6 +158,8 @@ Deliberate deviations:
   with `finished_at` set to now (logged with their count); jobs whose
   `finished_at` is older than 30 days are deleted.
 - `SubscribeEvents`: hands the bus's stream to the route.
+- `DeviceIsActive(id)`: whether a device is paired and not revoked,
+  read from `DeviceRepository::list_active` (few devices).
 - `RevokeDevice` publishes `Event::DeviceRevoked(DeviceId)` after the
   revocation is stored.
 - The job repository and the bus join `Deps`, next to the device
@@ -205,8 +208,15 @@ The stream:
   - `{"type": "device_revoked", "device_id"}`: a hint to reload the
     device list. The stream of the revoked device itself ends instead of
     forwarding it, at once; its reconnection gets a 401.
-  - `{"type": "resync"}`: the subscriber missed events; the client
-    reloads what it shows.
+  - `{"type": "resync"}`: the subscriber missed events. The stream
+    ends right after it: a missed event may be the caller's own
+    `device_revoked`, so the client reconnects (which authenticates it
+    again) and reloads what it shows.
+- Right after subscribing, the handler checks that the caller's device
+  is still active (`DeviceIsActive`, from `application`) and ends the
+  stream if not: a revocation between the authentication of the request
+  and the subscription published its event before the stream could
+  receive it. A storage error at that check answers `500`.
 - A `: ping` comment every 15 s.
 - Shutdown: a signal shared with `axum::serve`'s graceful shutdown ends
   every stream first, so the server stops at once. It reaches the
@@ -242,7 +252,8 @@ stream's items.
   - `GET /jobs`, `GET /jobs/{id}`, 404, 401 without a token (the
     existing contract walk covers the new routes);
   - the stream: headers, `retry`, a published job event arrives as
-    JSON, a lag gives `resync`, the ping (with a short interval injected
+    JSON, a lag gives `resync` then the end of the stream, a device
+    found inactive right after subscribing gets an ended stream, the ping (with a short interval injected
     in tests), the revoked device's stream ends while another device's
     receives `device_revoked`;
   - the contract check; the contract walk learns that `/events` answers

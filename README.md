@@ -126,8 +126,9 @@ bearer token.
 The stream starts with `retry: 3000`. Each event is one `data:` line
 holding JSON tagged by `type`: `job` (a job changed), `device_revoked`
 (reload the device list) or `resync` (events were missed). A `: ping`
-comment goes out every 15 seconds. The stream of a revoked device ends,
-and so do all streams when the server stops.
+comment goes out every 15 seconds. The stream ends after a `resync` (the
+client reconnects), when its own device is revoked, and when the server
+stops.
 
 The client reads the stream with `fetch` and the bearer token, never
 `EventSource` and never a token in a URL. On every connect, every

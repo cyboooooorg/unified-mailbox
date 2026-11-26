@@ -1,11 +1,16 @@
 mod common;
 
+use std::sync::Arc;
 use std::time::Duration;
+
+use application::testing::{InMemoryDevices, SeqSecrets};
+use application::{Deps, DeviceIsActive};
 
 use axum::body::Body;
 use chrono::{TimeZone, Utc};
-use common::{harness, harness_with_bus_capacity, next_chunk, pair, send_auth};
+use common::{Harness, harness, harness_with_bus_capacity, next_chunk, pair, send_auth};
 use domain::{DeviceId, Event, Job, JobId, JobKind, JobProgress, JobStatus};
+use http_api::AppState;
 use ports::EventBus;
 use serde_json::{Value, json};
 
@@ -93,7 +98,7 @@ async fn published_job_arrives_as_json() {
 }
 
 #[tokio::test]
-async fn lag_gives_resync() {
+async fn lag_sends_resync_then_ends_the_stream() {
     let h = harness_with_bus_capacity(1);
     let (_, token) = pair(&h, "Phone").await;
     let mut body = open(&h.router, &token).await;
@@ -101,11 +106,49 @@ async fn lag_gives_resync() {
     h.bus.publish(Event::Job(job(2)));
     let chunk = next_chunk(&mut body, WITHIN).await.unwrap();
     assert_eq!(data(&chunk), json!({"type": "resync"}));
-    // The stream goes on with the newest event.
-    let chunk = next_chunk(&mut body, WITHIN).await.unwrap();
-    let event = data(&chunk);
-    assert_eq!(event["type"], "job");
-    assert_eq!(event["job"]["id"], 2);
+    // A lost event may be the caller's own revocation: the client
+    // reconnects, which authenticates it again.
+    assert_eq!(next_chunk(&mut body, WITHIN).await, None);
+}
+
+/// A router whose check of the caller after subscribing reads `devices`,
+/// while authentication still reads the harness's store.
+fn router_checking_in(h: &Harness, devices: Arc<InMemoryDevices>) -> axum::Router {
+    let elsewhere = Deps {
+        repo: devices,
+        clock: h.clock.clone(),
+        secrets: Arc::new(SeqSecrets::new()),
+        jobs: h.jobs.clone(),
+        events: h.bus.clone(),
+    };
+    http_api::router(AppState {
+        device_is_active: Arc::new(DeviceIsActive::new(elsewhere)),
+        ..h.state.clone()
+    })
+}
+
+#[tokio::test]
+async fn stream_of_a_device_found_inactive_after_subscribing_ends() {
+    // The revocation happens between authentication and subscription: the
+    // router cannot order them, so the check answers from a store where
+    // the device is unknown while authentication still finds it.
+    let h = harness();
+    let (_, token) = pair(&h, "Phone").await;
+    let router = router_checking_in(&h, Arc::new(InMemoryDevices::new()));
+    let mut body = open(&router, &token).await;
+    h.bus.publish(Event::Job(job(1)));
+    assert_eq!(next_chunk(&mut body, WITHIN).await, None);
+}
+
+#[tokio::test]
+async fn failed_check_after_subscribing_is_a_500() {
+    let h = harness();
+    let (_, token) = pair(&h, "Phone").await;
+    let devices = Arc::new(InMemoryDevices::new());
+    devices.fail_reads(true);
+    let router = router_checking_in(&h, devices);
+    let res = send_auth(&router, "GET", "/api/v1/events", &token).await;
+    assert_eq!(res.status(), 500);
 }
 
 #[tokio::test]

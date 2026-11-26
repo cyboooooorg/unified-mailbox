@@ -17,7 +17,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
 use crate::auth::CurrentDevice;
-use crate::error::ErrorBody;
+use crate::error::{ApiError, ErrorBody};
 use crate::jobs::JobDto;
 use crate::state::AppState;
 
@@ -32,20 +32,35 @@ pub enum EventDto {
     Job { job: JobDto },
     /// A device was revoked: a hint to reload the device list.
     DeviceRevoked { device_id: i64 },
-    /// The subscriber missed events: reload what is shown.
+    /// The subscriber missed events: reload what is shown. The stream ends
+    /// right after it; reconnect.
     Resync,
 }
 
-/// The event to forward for one bus message; `None` when the stream must
-/// end, because the caller's own device was revoked.
-fn forward(message: BusMessage, caller: DeviceId) -> Option<EventDto> {
+/// What the stream does with one bus message.
+#[derive(Debug)]
+enum Next {
+    /// Send the event and go on.
+    Send(EventDto),
+    /// Send the event, then end the stream.
+    Last(EventDto),
+    /// End the stream without sending anything.
+    End,
+}
+
+/// What to do with one bus message for the stream of `caller`.
+///
+/// The stream ends on the caller's own revocation (its reconnection gets a
+/// 401), and after `resync` on a lag: a lost event may be that revocation,
+/// and the reconnection authenticates the caller again.
+fn forward(message: BusMessage, caller: DeviceId) -> Next {
     match message {
-        BusMessage::Event(Event::Job(job)) => Some(EventDto::Job { job: job.into() }),
-        BusMessage::Event(Event::DeviceRevoked(id)) if id == caller => None,
-        BusMessage::Event(Event::DeviceRevoked(id)) => Some(EventDto::DeviceRevoked {
+        BusMessage::Event(Event::Job(job)) => Next::Send(EventDto::Job { job: job.into() }),
+        BusMessage::Event(Event::DeviceRevoked(id)) if id == caller => Next::End,
+        BusMessage::Event(Event::DeviceRevoked(id)) => Next::Send(EventDto::DeviceRevoked {
             device_id: id.get(),
         }),
-        BusMessage::Lagged => Some(EventDto::Resync),
+        BusMessage::Lagged => Next::Last(EventDto::Resync),
     }
 }
 
@@ -62,12 +77,13 @@ fn sse_event(event: &EventDto) -> SseEvent {
 /// The stream starts with `retry: 3000`, then sends each event as one
 /// `data:` line holding an `EventDto` as JSON, and a `: ping` comment when
 /// idle. It ends when the caller's device is revoked (its reconnection then
-/// gets a 401) and when the server shuts down.
+/// gets a 401), after a `resync` event, and when the server shuts down.
 ///
 /// The client reads it with `fetch` and the bearer token (`EventSource`
 /// cannot send the header). On every connect and reconnect, and on every
 /// `resync` event, it reloads what it shows (and `GET /jobs/{id}` for a job
-/// it follows): events only tell what changed since.
+/// it follows): events only tell what changed since. After `resync` the
+/// stream ends: the client reconnects.
 #[utoipa::path(get, path = "/events", operation_id = "stream_events",
     responses(
         (status = 200,
@@ -79,14 +95,33 @@ fn sse_event(event: &EventDto) -> SseEvent {
 async fn stream_events(
     CurrentDevice(caller): CurrentDevice,
     State(state): State<AppState>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, ApiError> {
     // Subscribed before the response is sent, so the `retry` frame proves
     // the subscription exists.
     let messages = state.subscribe_events.execute();
-    let events = messages
-        .map(move |message| forward(message, caller))
-        .take_while(|event| ready(event.is_some()))
-        .filter_map(|event| ready(event.as_ref().map(sse_event)));
+    // A revocation between the authentication of this request and the
+    // subscription published its event before the stream could get it:
+    // check again, now that later ones cannot be missed.
+    let active = state.device_is_active.execute(caller).await?;
+    let messages = if active {
+        messages
+    } else {
+        stream::empty().boxed()
+    };
+    let events = messages.scan(false, move |ended, message| {
+        if *ended {
+            return ready(None);
+        }
+        let event = match forward(message, caller) {
+            Next::Send(event) => event,
+            Next::Last(event) => {
+                *ended = true;
+                event
+            }
+            Next::End => return ready(None),
+        };
+        ready(Some(sse_event(&event)))
+    });
     let mut shutdown = state.shutdown.clone();
     // A dropped sender counts as a shutdown too.
     let shut_down = async move {
@@ -96,10 +131,10 @@ async fn stream_events(
         .chain(events)
         .take_until(shut_down)
         .map(Ok::<_, Infallible>);
-    (
+    Ok((
         [(HeaderName::from_static("x-accel-buffering"), "no")],
         Sse::new(body).keep_alive(KeepAlive::new().interval(state.ping_interval).text("ping")),
-    )
+    ))
 }
 
 pub fn routes() -> OpenApiRouter<AppState> {
