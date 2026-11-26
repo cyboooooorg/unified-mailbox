@@ -115,8 +115,14 @@ impl Server {
 
     /// SIGTERM, then waits up to 10 s for the exit status.
     fn terminate(&mut self) -> std::process::ExitStatus {
+        self.stop("TERM")
+    }
+
+    /// Sends `signal` (`TERM`, `INT`), then waits up to 10 s for the exit
+    /// status.
+    fn stop(&mut self, signal: &str) -> std::process::ExitStatus {
         let status = Command::new("kill")
-            .args(["-TERM", &self.child.id().to_string()])
+            .args([&format!("-{signal}"), &self.child.id().to_string()])
             .status()
             .expect("run kill");
         assert!(status.success());
@@ -125,7 +131,10 @@ impl Server {
             if let Some(status) = self.child.try_wait().unwrap() {
                 return status;
             }
-            assert!(Instant::now() < deadline, "no exit within 10 s of SIGTERM");
+            assert!(
+                Instant::now() < deadline,
+                "no exit within 10 s of SIG{signal}"
+            );
             std::thread::sleep(Duration::from_millis(50));
         }
     }
@@ -156,6 +165,34 @@ fn serves_until_sigterm() {
     assert!(dir.path().join("d/unified-mailbox.db").is_file());
     assert!(dir.path().join("d/secret.key").is_file());
     assert!(server.terminate().success());
+}
+
+#[test]
+fn serves_until_sigint() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut server = Server::start(dir.path());
+    assert!(server.stop("INT").success());
+}
+
+#[test]
+fn logs_go_to_stderr_not_stdout() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = Command::new(BIN)
+        .arg("pair-code")
+        .current_dir(dir.path())
+        .env_clear()
+        .env("DATA_DIR", "./d")
+        .env("RUST_LOG", "info")
+        .output()
+        .expect("run pair-code");
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.starts_with("Pairing code: "), "{stdout}");
+    assert_eq!(stdout.lines().count(), 2, "{stdout}");
+    assert!(
+        !String::from_utf8_lossy(&out.stderr).is_empty(),
+        "expected logs on stderr at RUST_LOG=info"
+    );
 }
 
 #[test]

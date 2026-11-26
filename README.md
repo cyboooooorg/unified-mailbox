@@ -76,7 +76,7 @@ from (`server/.env` with the command above) to start.
 | `PROTECT_KNOWN_SENDERS` | `true` | Never send to junk a mail from a sender the user knows and that passed DMARC. |
 | `ARCHIVE_CATEGORIES` | empty | Comma-separated tag keys (such as `newsletter,promotion`) whose mails are archived once classified. |
 | `LISTEN_ADDR` | `127.0.0.1:8000` | Socket address (`host:port`, IPv6 as `[::1]:8000`) the API listens on. Behind Tailscale, keep the loopback address and expose it with `tailscale serve`, or use the tailnet address. In Docker, use `0.0.0.0:8000` and publish the port on the tailnet interface only. |
-| `RUST_LOG` | `info` | Log filter, in [`tracing-subscriber` `EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) syntax, such as `info,sqlite=debug`. |
+| `RUST_LOG` | `info` | Log filter, in [`tracing-subscriber` `EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) syntax, such as `info,sqlite=debug`. Logs go to stderr. |
 
 Each later feature adds its variables to this table and to
 `.env.example`.

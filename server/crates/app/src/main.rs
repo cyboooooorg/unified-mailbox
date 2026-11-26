@@ -45,6 +45,9 @@ async fn main() -> ExitCode {
 
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::new(&config.log_filter))
+        // Logs go to stderr: stdout holds only what a command prints, such
+        // as the two lines of `pair-code`.
+        .with_writer(std::io::stderr)
         .init();
 
     // Fatal errors go to stderr: a `RUST_LOG` that filters this crate out
