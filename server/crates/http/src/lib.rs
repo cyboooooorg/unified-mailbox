@@ -6,6 +6,7 @@ mod devices;
 mod error;
 mod extract;
 mod health;
+mod jobs;
 mod state;
 
 use axum::Router;
@@ -30,7 +31,7 @@ pub use state::AppState;
         description = "API of the Unified Mailbox server. Every route but /health and /pairing requires a per-device bearer token."
     ),
     modifiers(&Bearer),
-    components(schemas(ErrorBody, ErrorDetail, ErrorCode))
+    components(schemas(ErrorBody, ErrorDetail, ErrorCode, jobs::JobDto, jobs::JobStatusDto))
 )]
 struct ApiDoc;
 
@@ -58,8 +59,12 @@ impl Modify for Bearer {
 }
 
 fn api() -> OpenApiRouter<AppState> {
-    OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .nest("/api/v1", health::routes().merge(devices::routes()))
+    OpenApiRouter::with_openapi(ApiDoc::openapi()).nest(
+        "/api/v1",
+        health::routes()
+            .merge(devices::routes())
+            .merge(jobs::routes()),
+    )
 }
 
 /// The whole application, layers included.

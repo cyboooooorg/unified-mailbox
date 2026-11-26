@@ -163,6 +163,107 @@
         ]
       }
     },
+    "/api/v1/jobs": {
+      "get": {
+        "summary": "Lists the running jobs, oldest first.",
+        "operationId": "list_jobs",
+        "responses": {
+          "200": {
+            "description": "The running jobs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}": {
+      "get": {
+        "summary": "Returns one job, running or finished.",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/pairing": {
       "post": {
         "summary": "Pairs a new device with a one-time code; needs no token.",
@@ -345,6 +446,83 @@
         "type": "string",
         "enum": [
           "ok"
+        ]
+      },
+      "JobDto": {
+        "type": "object",
+        "description": "A long operation and its progress.",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "done",
+          "failed",
+          "total",
+          "error",
+          "created_at",
+          "finished_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "done": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Items processed with success.",
+            "minimum": 0
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Always present, `null` unless the job failed."
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Items that failed.",
+            "minimum": 0
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Always present, `null` while the job runs."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatusDto"
+          },
+          "total": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Always present, `null` while the number of items is unknown.",
+            "minimum": 0
+          }
+        }
+      },
+      "JobStatusDto": {
+        "type": "string",
+        "description": "Where a job stands.",
+        "enum": [
+          "running",
+          "succeeded",
+          "failed",
+          "interrupted"
         ]
       },
       "PairingCodeDto": {

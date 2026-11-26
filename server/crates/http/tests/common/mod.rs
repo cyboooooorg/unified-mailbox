@@ -3,11 +3,12 @@
 use std::sync::Arc;
 
 use application::Deps;
-use application::testing::{FixedClock, InMemoryDevices, InMemoryJobs, RecordingBus, SeqSecrets};
+use application::testing::{FixedClock, InMemoryDevices, InMemoryJobs, SeqSecrets};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, Response};
 use chrono::{TimeZone, Utc};
+use events_memory::MemoryBus;
 use http_api::AppState;
 use tower::ServiceExt;
 
@@ -15,6 +16,9 @@ pub struct Harness {
     pub router: Router,
     pub clock: Arc<FixedClock>,
     pub state: AppState,
+    pub jobs: Arc<InMemoryJobs>,
+    pub bus: Arc<MemoryBus>,
+    pub shutdown: tokio::sync::watch::Sender<bool>,
 }
 
 pub fn harness() -> Harness {
@@ -27,17 +31,26 @@ pub fn harness_with() -> (Harness, Arc<InMemoryDevices>) {
     let clock = Arc::new(FixedClock::new(
         Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
     ));
-    let state = AppState::new(Deps {
-        repo: repo.clone(),
-        clock: clock.clone(),
-        secrets: Arc::new(SeqSecrets::new()),
-        jobs: Arc::new(InMemoryJobs::new()),
-        events: Arc::new(RecordingBus::new()),
-    });
+    let jobs = Arc::new(InMemoryJobs::new());
+    let bus = Arc::new(MemoryBus::new(64));
+    let (shutdown, shutdown_rx) = tokio::sync::watch::channel(false);
+    let state = AppState::new(
+        Deps {
+            repo: repo.clone(),
+            clock: clock.clone(),
+            secrets: Arc::new(SeqSecrets::new()),
+            jobs: jobs.clone(),
+            events: bus.clone(),
+        },
+        shutdown_rx,
+    );
     let harness = Harness {
         router: http_api::router(state.clone()),
         clock,
         state,
+        jobs,
+        bus,
+        shutdown,
     };
     (harness, repo)
 }

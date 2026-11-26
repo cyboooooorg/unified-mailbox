@@ -731,6 +731,7 @@ dependencies = [
  "axum",
  "chrono",
  "domain",
+ "events-memory",
  "http-body-util",
  "ports",
  "serde",

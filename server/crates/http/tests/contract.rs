@@ -70,6 +70,8 @@ fn contract_is_user_facing() {
             r#"delete /api/v1/devices/{id} "revoke_device""#,
             r#"get /api/v1/devices "list_devices""#,
             r#"get /api/v1/health "get_health""#,
+            r#"get /api/v1/jobs "list_jobs""#,
+            r#"get /api/v1/jobs/{id} "get_job""#,
             r#"post /api/v1/devices/pairing-codes "create_pairing_code""#,
             r#"post /api/v1/pairing "pair_device""#,
         ]
