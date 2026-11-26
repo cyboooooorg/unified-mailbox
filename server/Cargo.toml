@@ -22,12 +22,15 @@ domain = { path = "crates/domain" }
 ports = { path = "crates/ports" }
 application = { path = "crates/application" }
 sqlite = { path = "crates/adapters/sqlite" }
+async-trait = "0.1"
+base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 thiserror = "2"
 unicode-normalization = "0.1"
 chacha20poly1305 = "0.10"
 dotenvy = "0.15"
 getrandom = { version = "0.3", features = ["std"] }
+sha2 = "0.10"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
