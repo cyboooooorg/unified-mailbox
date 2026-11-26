@@ -171,7 +171,7 @@ Deliberate deviations:
 In the existing `sqlite` crate, on `Store`, as `DeviceRepository`.
 Migration `0003_jobs.sql`: `jobs` (`id` integer primary key, `kind`,
 `status`, `done`, `failed`, `total` nullable, `error` nullable,
-`created_at`, `updated_at`, `finished_at` nullable), and an index on
+`created_at`, `finished_at` nullable), and an index on
 `status`. Progress writes happen at the 0.3 s throttle at most.
 
 ## Event bus
