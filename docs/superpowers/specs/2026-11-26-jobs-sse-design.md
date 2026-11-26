@@ -153,6 +153,9 @@ Deliberate deviations:
   `set_total`. It saves and publishes at most every 0.3 s, measured with
   `Clock`; the end always saves and publishes the final counters. A
   failed save is logged and the work goes on: progress is a hint.
+- A failed final write (`finish`) is logged and the end is still
+  published, but the stored job stays `running` until the next startup
+  marks it `interrupted`. A known limit, accepted: no retry.
 - `GetJob`, `ListActiveJobs`.
 - `RecoverJobs`, run once at startup: running jobs become `interrupted`
   with `finished_at` set to now (logged with their count); jobs whose
@@ -256,9 +259,10 @@ stream's items.
     existing contract walk covers the new routes);
   - the stream: headers, `retry`, a published job event arrives as
     JSON, a lag gives `resync` then the end of the stream, a device
-    found inactive right after subscribing gets an ended stream, the ping (with a short interval injected
-    in tests), the revoked device's stream ends while another device's
-    receives `device_revoked`;
+    found inactive right after subscribing gets an ended stream, the
+    ping (with a short interval injected in tests), the revoked
+    device's stream ends while another device's receives
+    `device_revoked`;
   - the contract check; the contract walk learns that `/events` answers
     `text/event-stream`.
 - `app`: SIGINT with an open stream stops the server (next to the

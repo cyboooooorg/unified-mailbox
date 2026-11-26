@@ -75,7 +75,8 @@ environment variable.
 ## Jobs
 
 - `impl JobRepository for Store`: table `jobs` (kind, status, counters,
-  optional total, error code, `created_at`, `finished_at`). There is no
+  optional total, error message in English, `created_at`,
+  `finished_at`). There is no
   `updated_at`: the adapter has no clock and nothing reads it.
 - `status` is checked by `CHECK`: `running`, `succeeded`, `failed` or
   `interrupted`. Counters are INTEGER, converted from and to `u64`; a
