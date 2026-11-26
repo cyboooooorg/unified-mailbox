@@ -53,7 +53,7 @@ fn data(chunk: &str) -> Value {
 }
 
 #[tokio::test]
-async fn stream_headers() {
+async fn stream_headers_and_retry_frame() {
     let h = harness();
     let (_, token) = pair(&h, "Phone").await;
     let res = send_auth(&h.router, "GET", "/api/v1/events", &token).await;
@@ -61,14 +61,9 @@ async fn stream_headers() {
     assert_eq!(res.headers()["content-type"], "text/event-stream");
     assert_eq!(res.headers()["x-accel-buffering"], "no");
     assert_eq!(res.headers()["cache-control"], "no-store");
-}
-
-#[tokio::test]
-async fn stream_starts_with_retry() {
-    let h = harness();
-    let (_, token) = pair(&h, "Phone").await;
-    // `open` checks the first frame.
-    let _body = open(&h.router, &token).await;
+    let mut body = res.into_body();
+    let first = next_chunk(&mut body, WITHIN).await.expect("a first frame");
+    assert_eq!(first, "retry: 3000\n\n");
 }
 
 #[tokio::test]
@@ -95,6 +90,24 @@ async fn published_job_arrives_as_json() {
             }
         })
     );
+}
+
+#[tokio::test]
+async fn failed_job_carries_its_error_and_end() {
+    let h = harness();
+    let (_, token) = pair(&h, "Phone").await;
+    let mut body = open(&h.router, &token).await;
+    let failed = Job {
+        status: JobStatus::Failed,
+        error: Some("invented failure".to_owned()),
+        finished_at: Some(Utc.with_ymd_and_hms(2026, 1, 1, 0, 5, 0).unwrap()),
+        ..job(8)
+    };
+    h.bus.publish(Event::Job(failed));
+    let event = data(&next_chunk(&mut body, WITHIN).await.unwrap());
+    assert_eq!(event["job"]["status"], "failed");
+    assert_eq!(event["job"]["error"], "invented failure");
+    assert_eq!(event["job"]["finished_at"], "2026-01-01T00:05:00Z");
 }
 
 #[tokio::test]
@@ -179,6 +192,8 @@ async fn own_revocation_ends_stream() {
     .await;
     assert_eq!(res.status(), 204);
     assert_eq!(next_chunk(&mut body, WITHIN).await, None);
+    let res = send_auth(&h.router, "GET", "/api/v1/events", &token).await;
+    assert_eq!(res.status(), 401);
 }
 
 #[tokio::test]
@@ -205,5 +220,14 @@ async fn shutdown_ends_stream() {
     let (_, token) = pair(&h, "Phone").await;
     let mut body = open(&h.router, &token).await;
     h.shutdown.send(true).unwrap();
+    assert_eq!(next_chunk(&mut body, WITHIN).await, None);
+}
+
+#[tokio::test]
+async fn dropped_shutdown_sender_ends_stream() {
+    let h = harness();
+    let (_, token) = pair(&h, "Phone").await;
+    let mut body = open(&h.router, &token).await;
+    drop(h.shutdown);
     assert_eq!(next_chunk(&mut body, WITHIN).await, None);
 }
