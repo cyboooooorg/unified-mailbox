@@ -330,36 +330,47 @@ fn sigint_with_open_event_stream() {
     assert!(server.stop("INT").success());
 }
 
-#[test]
-fn running_job_interrupted_after_restart() {
-    use ports::{JobRepository, NewJob};
-
-    let dir = tempfile::tempdir().unwrap();
-    // Creates the store (database and key) the way the binary does.
-    assert!(pair_code(dir.path()).status.success());
-
+/// Runs `work` on the store of `dir`, opened the way the binary opens it.
+fn with_store<T>(dir: &Path, work: impl AsyncFnOnce(&sqlite::Store) -> T) -> T {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
-    let id = runtime.block_on(async {
+    runtime.block_on(async {
         let store = sqlite::Store::open(sqlite::StoreConfig {
-            database: dir.path().join("d/unified-mailbox.db"),
-            key_file: dir.path().join("d/secret.key"),
+            database: dir.join("d/unified-mailbox.db"),
+            key_file: dir.join("d/secret.key"),
         })
         .await
         .unwrap();
-        let job = store
+        let out = work(&store).await;
+        store.close().await;
+        out
+    })
+}
+
+/// Creates the store the way the binary does, then a running job in it.
+fn running_job(dir: &Path) -> domain::JobId {
+    use ports::{JobRepository, NewJob};
+
+    assert!(pair_code(dir).status.success());
+    with_store(dir, async |store| {
+        store
             .create(NewJob {
                 kind: domain::JobKind::new("labels_sync").unwrap(),
                 total: Some(10),
                 created_at: chrono::Utc::now(),
             })
             .await
-            .unwrap();
-        store.close().await;
-        job.id
-    });
+            .unwrap()
+            .id
+    })
+}
+
+#[test]
+fn running_job_interrupted_after_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let id = running_job(dir.path());
 
     let mut server = Server::start(dir.path());
     let token = pair_device(&server, dir.path());
@@ -376,4 +387,29 @@ fn running_job_interrupted_after_restart() {
     assert!(body.contains(r#""status":"interrupted""#), "{body}");
     assert!(!body.contains(r#""finished_at":null"#), "{body}");
     assert!(server.terminate().success());
+}
+
+#[test]
+fn failed_bind_leaves_running_jobs_alone() {
+    use ports::JobRepository;
+
+    // A second server started by mistake on the data directory of a live
+    // one must not mark the live server's jobs interrupted.
+    let dir = tempfile::tempdir().unwrap();
+    let id = running_job(dir.path());
+    let held = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = held.local_addr().unwrap();
+    let out = run(
+        dir.path(),
+        &[
+            ("DATA_DIR", "./d"),
+            ("LISTEN_ADDR", &addr.to_string()),
+            ("RUST_LOG", "off"),
+        ],
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let job = with_store(dir.path(), async |store| {
+        store.get(id).await.unwrap().expect("the job")
+    });
+    assert_eq!(job.status, domain::JobStatus::Running);
 }

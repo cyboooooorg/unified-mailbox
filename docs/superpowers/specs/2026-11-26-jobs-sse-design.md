@@ -156,7 +156,10 @@ Deliberate deviations:
 - `GetJob`, `ListActiveJobs`.
 - `RecoverJobs`, run once at startup: running jobs become `interrupted`
   with `finished_at` set to now (logged with their count); jobs whose
-  `finished_at` is older than 30 days are deleted.
+  `finished_at` is older than 30 days are deleted. `app` runs it after
+  binding the listener and before serving: a second server started by
+  mistake on the same data directory fails to bind and leaves the live
+  server's jobs alone.
 - `SubscribeEvents`: hands the bus's stream to the route.
 - `DeviceIsActive(id)`: whether a device is paired and not revoked,
   read from `DeviceRepository::list_active` (few devices).
@@ -260,7 +263,8 @@ stream's items.
     `text/event-stream`.
 - `app`: SIGINT with an open stream stops the server (next to the
   existing shutdown test); a job left running before a restart is
-  `interrupted` after it.
+  `interrupted` after it; a server that fails to bind leaves a running
+  job `running`.
 
 ## Documentation
 

@@ -88,7 +88,19 @@ async fn main() -> ExitCode {
 }
 
 async fn serve(config: &Config, deps: Deps) -> ExitCode {
-    // Before binding: what was running died with the previous process.
+    let listener = match tokio::net::TcpListener::bind(config.listen_addr).await {
+        Ok(listener) => listener,
+        Err(err) => {
+            eprintln!(
+                "LISTEN_ADDR: cannot listen on {}: {err}",
+                config.listen_addr
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+    // After binding: a second server started by mistake on the same data
+    // directory fails to bind and leaves the live server's jobs alone.
+    // Before serving: what was running died with the previous process.
     match RecoverJobs::new(deps.clone()).execute().await {
         Ok(recovered) => tracing::info!(
             interrupted = recovered.interrupted,
@@ -100,16 +112,6 @@ async fn serve(config: &Config, deps: Deps) -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
-    let listener = match tokio::net::TcpListener::bind(config.listen_addr).await {
-        Ok(listener) => listener,
-        Err(err) => {
-            eprintln!(
-                "LISTEN_ADDR: cannot listen on {}: {err}",
-                config.listen_addr
-            );
-            return ExitCode::FAILURE;
-        }
-    };
     tracing::info!(addr = %config.listen_addr, "listening");
     // Kept alive for the server's lifetime: dropping it would end the
     // streams. The graceful shutdown sends `true` on it first, so open
