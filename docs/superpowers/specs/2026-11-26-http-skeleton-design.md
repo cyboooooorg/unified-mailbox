@@ -167,7 +167,9 @@ The codes are part of the contract (an enum in `openapi.json`).
   `token_hash` unique, `created_at`, `last_seen_at`, `revoked_at`) and
   `pairing_codes` (`code_hash` primary key, `created_at`, `expires_at`,
   `created_by` nullable device id, `used_at`), and the repository.
-- `http`: the router, the DTOs and their conversions, the error type, an
+- `http` (directory `crates/http`, package `http-api`: a package
+  named `http` would clash with the `http` crate axum depends on): the
+  router, the DTOs and their conversions, the error type, an
   authentication layer that calls `AuthenticateDevice` and puts the
   device id in the request extensions, and `openapi()`. It depends on
   `application`, never on `sqlite`.

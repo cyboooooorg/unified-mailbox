@@ -4,12 +4,13 @@
 
 **Goal:** Turn the server into a running axum server under `/api/v1`,
 with per-device bearer tokens paired by one-time code and
-`api/openapi.json` generated from the `http` crate.
+`api/openapi.json` generated from the HTTP crate.
 
 **Architecture:** `domain` gets the device types, `ports` the first
 traits (`DeviceRepository`, `Clock`, `SecretGenerator`), `application`
-one use case per action, `sqlite` the repository, a new `http` crate the
-routes, DTOs, errors and contract, `app` the wiring, `LISTEN_ADDR` and
+one use case per action, `sqlite` the repository, a new HTTP crate
+(package `http-api`, directory `crates/http`) the routes, DTOs, errors
+and contract, `app` the wiring, `LISTEN_ADDR` and
 the `pair-code` subcommand.
 
 **Tech Stack:** Rust 2024, axum 0.8, utoipa 5 + utoipa-axum 0.2,
@@ -37,7 +38,13 @@ tower-http 0.6, serde, sqlx 0.8 (SQLite), async-trait, sha2, base64.
 - Device name: trimmed, 1 to 64 characters (`char`s, not bytes), no
   control character; duplicates allowed.
 - `last_seen_at` written only when unset or at least 1 minute old.
-- Dates on the wire: RFC 3339, UTC.
+- Dates on the wire: RFC 3339, UTC (chrono's serde form). Stored
+  timestamps are truncated to milliseconds (`sqlite::time::to_db`), so a
+  date read back from the store may differ from the clock by under 1 ms.
+- The HTTP crate lives in `server/crates/http` (the layout of
+  `CLAUDE.md`) but its package is named `http-api` (imported as
+  `http_api`): a package named `http` would clash with the `http` crate
+  axum depends on, and `cargo test -p http` would be ambiguous.
 - No token or pairing code in a log line, a `Debug` output or an error
   message.
 - `domain`, `ports`, `application` stay free of I/O crates: the
@@ -46,22 +53,23 @@ tower-http 0.6, serde, sqlx 0.8 (SQLite), async-trait, sha2, base64.
   and `X-Content-Type-Options: nosniff`.
 - `LISTEN_ADDR` default `127.0.0.1:8000`.
 - Each task ends with `mise run ci` green and a Conventional Commit
-  (scope `domain`, `sqlite`, `http`, `api`, `app`), ending with the
+  (scope `domain`, `sqlite`, `http`, `api`, `app`; the scope stays
+  `http`, the layer's name), ending with the
   session's `Co-Authored-By` and `Claude-Session` trailers.
 
 ## Review Focus
 
 - `Authorization` variants: `bearer` in lower case, several spaces,
   `Basic …`, `Bearer` with nothing after, a token one character short:
-  each a 401, never a 500 (Task 6).
+  each a 401, never a 500 (Task 5).
 - A name of 64 accented characters (`é` × 64) is accepted though it is
   128 bytes; 65 is refused (Task 1).
 - A code typed as `abcd efgh`, `ABCD-EFGH` or with `o`/`i`/`l` pairs with
-  the code shown (Task 1, Task 6).
+  the code shown (Task 1, Task 5).
 - `DELETE /api/v1/devices/abc` and `/devices/99999999999999999999` give
-  404 `not_found`, not 422 or 500 (Task 6).
+  404 `not_found`, not 422 or 500 (Task 5).
 - `LISTEN_ADDR` on a port already in use: stderr names `LISTEN_ADDR`,
-  exit status 1 (Task 7).
+  exit status 1 (Task 6).
 
 ---
 
@@ -80,7 +88,8 @@ tower-http 0.6, serde, sqlx 0.8 (SQLite), async-trait, sha2, base64.
     Result<DeviceName, DeviceNameError>`, `as_str(&self) -> &str`,
     `pub const MAX_CHARS: usize = 64`.
   - `pub enum DeviceNameError { Empty, TooLong { max: usize },
-    ControlCharacter }` (`thiserror`, messages are codes:
+    ControlCharacter }` (`Debug, Clone, PartialEq, Eq`; `DeviceName`
+    and `PairingCode` derive `Clone, PartialEq, Eq` too) (`thiserror`, messages are codes:
     `device_name_empty`, `device_name_too_long`,
     `device_name_control_character`).
   - `pub struct Device { pub id: DeviceId, pub name: DeviceName, pub
@@ -168,20 +177,25 @@ git commit -m "feat(domain): add devices, device names and pairing codes"
 
 ---
 
-### Task 2: Ports and test doubles
+### Task 2: Ports, test doubles and device use cases
 
 **Files:**
+- Modify: `server/Cargo.toml` (workspace deps `async-trait = "0.1"`,
+  `sha2 = "0.10"`, `base64 = "0.22"`)
 - Modify: `server/crates/ports/src/lib.rs`, `server/crates/ports/Cargo.toml`
-- Create: `server/crates/ports/src/clock.rs`, `server/crates/ports/src/secrets.rs`,
-  `server/crates/ports/src/devices.rs`
-- Create: `server/crates/application/src/testing.rs` (behind the
-  `testing` feature)
-- Modify: `server/crates/application/Cargo.toml`, `server/Cargo.toml`
-  (workspace deps `async-trait = "0.1"`)
+  (`async-trait`, `chrono`, `thiserror`)
+- Create: `server/crates/ports/src/clock.rs`, `src/secrets.rs`,
+  `src/devices.rs`
+- Create: `server/crates/application/src/testing.rs`,
+  `server/crates/application/src/devices/{mod.rs,token.rs,create_pairing_code.rs,pair_device.rs,authenticate_device.rs,list_devices.rs,revoke_device.rs}`
+- Modify: `server/crates/application/src/lib.rs`,
+  `server/crates/application/Cargo.toml` (`async-trait`, `base64`,
+  `chrono`, `sha2`, `thiserror`; `[features] testing = []`; dev:
+  `tokio`)
 
 **Interfaces:**
 - Consumes: Task 1 types.
-- Produces (in `ports`, re-exported at the crate root):
+- Produces, in `ports` (re-exported at the crate root):
 
 ```rust
 pub trait Clock: Send + Sync { fn now(&self) -> DateTime<Utc>; }
@@ -218,58 +232,28 @@ pub trait DeviceRepository: Send + Sync {
 }
 ```
 
-- Produces (in `application::testing`, feature `testing`, also enabled
-  for the crate's own tests through `[dev-dependencies] application = {
-  workspace = true, features = ["testing"] }` or `cfg(any(test,
-  feature = "testing"))`):
+- Produces, in `application::testing` (declared
+  `#[cfg(any(test, feature = "testing"))] pub mod testing;`; other
+  crates enable the `testing` feature in their dev-dependencies):
   - `FixedClock` with `new(DateTime<Utc>)`, `set(&self, DateTime<Utc>)`,
     `advance(&self, TimeDelta)` (interior `Mutex`).
   - `SeqSecrets` filling each call with a counter byte (`0x01`, then
     `0x02`…), so successive tokens and codes differ and are predictable.
-  - `InMemoryDevices` implementing `DeviceRepository` with a `Mutex`, and
-    `touch_count(&self) -> usize` and `stored_token_hashes(&self) ->
-    Vec<String>` for assertions.
-
-- [ ] **Step 1: Write the ports and the doubles**; no behavior of their
-  own to test beyond compiling and the `layering` test (async-trait is
-  not an I/O crate).
-
-- [ ] **Step 2: Run `mise run ci`**
-
-Expected: PASS, including `layering`.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add server/Cargo.toml server/Cargo.lock server/crates/ports server/crates/application
-git commit -m "feat(domain): add the device repository, clock and secret ports"
-```
-
-(Scope `domain` covers the core crates; no `ports` scope exists.)
-
----
-
-### Task 3: Device use cases
-
-**Files:**
-- Create: `server/crates/application/src/devices/{mod.rs,token.rs,create_pairing_code.rs,pair_device.rs,authenticate_device.rs,list_devices.rs,revoke_device.rs}`
-- Modify: `server/crates/application/src/lib.rs`,
-  `server/crates/application/Cargo.toml` (`sha2 = "0.10"`, `base64 =
-  "0.22"`, `chrono`, `thiserror`, `async-trait`; dev: `tokio` with
-  `macros, rt`)
-
-**Interfaces:**
-- Consumes: Tasks 1–2.
-- Produces (`application::devices`, re-exported):
+  - `InMemoryDevices` implementing `DeviceRepository` with a `Mutex`
+    (ids from 1), plus `touch_count(&self) -> usize` and
+    `stored_token_hashes(&self) -> Vec<String>` for assertions.
+- Produces, in `application` (the `devices` module, its items
+  re-exported at the crate root, so `application::Deps` etc.):
 
 ```rust
+#[derive(Clone)]
 pub struct Deps { pub repo: Arc<dyn DeviceRepository>, pub clock: Arc<dyn Clock>, pub secrets: Arc<dyn SecretGenerator> }
 
 /// A freshly issued bearer token; `Debug` prints `DeviceToken(..)`.
 pub struct DeviceToken(String);   // as_str(&self) -> &str
-pub fn hash_token(token: &str) -> String;          // hex SHA-256
-pub fn hash_pairing_code(code: &PairingCode) -> String; // hex SHA-256 of as_str()
-pub fn looks_like_token(input: &str) -> bool;      // "um_" + 43 base64url chars
+pub fn hash_token(token: &str) -> String;               // lowercase hex SHA-256
+pub fn hash_pairing_code(code: &PairingCode) -> String; // lowercase hex SHA-256 of as_str()
+pub fn looks_like_token(input: &str) -> bool;           // "um_" + 43 chars of [A-Za-z0-9_-]
 
 pub struct CreatePairingCode(Deps);
 impl CreatePairingCode { pub fn new(deps: Deps) -> Self;
@@ -286,17 +270,18 @@ pub struct AuthenticateDevice(Deps);
 impl AuthenticateDevice { pub fn new(deps: Deps) -> Self;
     pub async fn execute(&self, token: &str) -> Result<Option<DeviceId>, RepositoryError>; }
 
-pub struct ListDevices(Deps);   // execute(&self) -> Result<Vec<Device>, RepositoryError>
-pub struct RevokeDevice(Deps);  // execute(&self, id: DeviceId) -> Result<bool, RepositoryError>
+pub struct ListDevices(Deps);   // new(Deps); execute(&self) -> Result<Vec<Device>, RepositoryError>
+pub struct RevokeDevice(Deps);  // new(Deps); execute(&self, id: DeviceId) -> Result<bool, RepositoryError>
 ```
 
 Rules: `PairDevice` validates the name first (an invalid name is
 `InvalidName` even with a bad code), then parses the code (a malformed
 code is `InvalidCode` without a lookup), then draws 32 bytes for the
 token. `AuthenticateDevice` returns `None` without a lookup when
-`looks_like_token` is false, touches `last_seen_at` when it is `None` or
-`now - last_seen_at >= LAST_SEEN_RESOLUTION`. `CreatePairingCode` draws
-5 bytes, `expires_at = now + PAIRING_CODE_TTL`.
+`looks_like_token` is false, and touches `last_seen_at` when it is
+`None` or `now - last_seen_at >= LAST_SEEN_RESOLUTION`.
+`CreatePairingCode` draws 5 bytes, `expires_at = now +
+PAIRING_CODE_TTL`.
 
 - [ ] **Step 1: Write the failing tests** (`#[tokio::test]`, with
   `InMemoryDevices`, `FixedClock` at `2026-01-01T00:00:00Z`,
@@ -307,8 +292,8 @@ token. `AuthenticateDevice` returns `None` without a lookup when
   - `token_shape`: `token.as_str()` starts with `um_`, length 46,
     `looks_like_token` true; `looks_like_token("um_short")` false.
   - `token_not_stored_in_clear`: after pairing,
-    `stored_token_hashes() == vec![hash_token(token.as_str())]` and none
-    equals the token.
+    `stored_token_hashes() == vec![hash_token(token.as_str())]`, and
+    `format!("{token:?}") == "DeviceToken(..)"`.
   - `code_valid_until_ttl`: advance 9 min 59 s → pairing works; with a
     new code, advance exactly 10 min → `PairError::InvalidCode`.
   - `code_single_use`: second pairing with the same code →
@@ -321,7 +306,8 @@ token. `AuthenticateDevice` returns `None` without a lookup when
     authenticate → `None`; revoke again → `false`; revoke
     `DeviceId::new(999)` → `false`.
   - `last_seen_throttled`: authenticate twice at the same instant →
-    `touch_count() == 1`; advance 59 s → still 1; advance to 60 s → 2.
+    `touch_count() == 1`; advance 59 s, authenticate → still 1; advance
+    1 more second (60 s after the first touch), authenticate → 2.
   - `list_returns_active_only`: pair two devices, revoke the first →
     list has the second only.
   - `malformed_token_skips_lookup`: `authenticate("Bearer x")` → `None`
@@ -329,27 +315,31 @@ token. `AuthenticateDevice` returns `None` without a lookup when
 
 - [ ] **Step 2: Run them and see them fail**
 
-Run: `cd server && cargo test -p application devices`
+Run: `cd server && cargo test -p application`
 Expected: compile errors.
 
-- [ ] **Step 3: Implement the use cases** with the signatures above.
+- [ ] **Step 3: Implement** the ports, the doubles and the use cases
+  with the signatures above.
 
 - [ ] **Step 4: Run them and see them pass**
 
-Run: `cd server && cargo test -p application devices`
+Run: `cd server && cargo test -p application`
 Expected: PASS.
 
-- [ ] **Step 5: `mise run ci`, then commit**
+- [ ] **Step 5: `mise run ci`** (the `layering` test must pass:
+  `async-trait`, `sha2` and `base64` are not I/O crates), then commit
 
 ```bash
-git commit -am "feat(domain): add the device pairing and authentication use cases"
+git add server/Cargo.toml server/Cargo.lock server/crates/ports server/crates/application
+git commit -m "feat(domain): add the device ports and use cases"
 ```
 
-(Add the new files first: `git add server/crates/application`.)
+(The scope `domain` covers the core crates; no `ports` or
+`application` scope exists.)
 
 ---
 
-### Task 4: SQLite device repository
+### Task 3: SQLite device repository
 
 **Files:**
 - Create: `server/crates/adapters/sqlite/migrations/0002_devices.sql`,
@@ -395,6 +385,9 @@ NULL AND expires_at > ?` whose `rows_affected() == 1` gates the
   (`#[tokio::test]`, store opened in a `tempdir`):
 
   - `migration_creates_tables`: both tables exist after `Store::open`.
+  - `token_hash_unique`: inserting two devices with the same
+    `token_hash` (through two redeemed codes) fails with a
+    `RepositoryError`, not a panic.
   - `redeem_once`: insert a code expiring in 10 min, redeem → `Some`,
     redeem again → `None`.
   - `redeem_expired_or_unknown`: `now == expires_at` → `None`; unknown
@@ -415,8 +408,13 @@ NULL AND expires_at > ?` whose `rows_affected() == 1` gates the
 Run: `cd server && cargo test -p sqlite devices`
 Expected: compile errors.
 
-- [ ] **Step 3: Implement the migration and the repository**; update
-  `main.rs` call site if `close` is used (it is not yet).
+The sqlite tests need `application` (feature `testing`) only if they
+use its doubles; they build `NewDevice` and `NewPairingCode` by hand
+with fixed times and hashes like `"a".repeat(64)`.
+
+- [ ] **Step 3: Implement the migration and the repository.** Nothing
+  calls `Store::close` yet; the signature change has no call site to
+  update.
 
 - [ ] **Step 4: Run them and see them pass**, then `mise run ci`.
 
@@ -429,22 +427,31 @@ git commit -m "feat(sqlite): store devices and pairing codes"
 
 ---
 
-### Task 5: `http` crate, errors, health and the contract
+### Task 4: `http` crate, errors, health and the contract
 
 **Files:**
-- Create: `server/crates/http/Cargo.toml`, `server/crates/http/src/lib.rs`,
-  `src/error.rs`, `src/extract.rs`, `src/health.rs`, `src/state.rs`,
-  `src/bin/openapi.rs`, `tests/contract.rs`, `tests/errors.rs`
+- Create: `server/crates/http/Cargo.toml` (package `http-api`),
+  `server/crates/http/src/lib.rs`, `src/error.rs`, `src/extract.rs`,
+  `src/health.rs`, `src/state.rs`, `src/bin/openapi.rs`,
+  `tests/common/mod.rs` (builds the router over the
+  `application::testing` doubles and returns the `FixedClock` and the
+  `AppState` too), `tests/contract.rs`, `tests/errors.rs`
 - Create: `api/openapi.json` (generated)
-- Modify: `server/Cargo.toml` (member `crates/http`, workspace deps
-  `axum = "0.8"`, `tower-http = { version = "0.6", features =
-  ["trace", "set-header"] }`, `utoipa = { version = "5", features =
-  ["chrono"] }`, `utoipa-axum = "0.2"`, `serde = { version = "1",
-  features = ["derive"] }`, `serde_json = "1"`, `http = { path =
-  "crates/http" }`), `mise.toml` (task `openapi`)
+- Modify: `server/Cargo.toml` (member `crates/http`; workspace deps
+  `axum = { version = "0.8", features = ["macros"] }`, `tower-http = {
+  version = "0.6", features = ["trace", "set-header"] }`, `utoipa = {
+  version = "5", features = ["chrono"] }`, `utoipa-axum = "0.2"`,
+  `serde = { version = "1", features = ["derive"] }`, `serde_json =
+  "1"`, `http-api = { path = "crates/http" }`), `mise.toml` (task
+  `openapi`)
+- Package deps: `application`, `domain`, `axum`, `chrono` (with the
+  `serde` feature, enabled in this crate only), `serde`, `serde_json`,
+  `tower-http`, `tracing`, `utoipa`, `utoipa-axum`. Dev: `application`
+  with feature `testing`, `tokio`, `tower = { version = "0.5",
+  features = ["util"] }`, `http-body-util = "0.1"`.
 
 **Interfaces:**
-- Consumes: Task 3 use cases.
+- Consumes: Task 2 use cases and `Deps`, `application::testing` doubles.
 - Produces:
 
 ```rust
@@ -464,6 +471,9 @@ pub fn openapi() -> utoipa::openapi::OpenApi;           // same OpenApiRouter as
 pub enum ErrorCode { InvalidPairingCode, Unauthorized, NotFound, MethodNotAllowed,
                      PayloadTooLarge, UnsupportedMediaType, InvalidRequest, Internal }
                      // serde + ToSchema, snake_case
+/// The error body: `{"error": {"code", "message"}}` (serde + ToSchema).
+pub struct ErrorBody { pub error: ErrorDetail }
+pub struct ErrorDetail { pub code: ErrorCode, pub message: String }
 pub struct ApiError { status: StatusCode, code: ErrorCode, message: String }
 impl ApiError { pub fn new(code: ErrorCode, message: impl Into<String>) -> ApiError; } // status from code
 impl IntoResponse for ApiError;  // adds WWW-Authenticate: Bearer on 401
@@ -480,7 +490,9 @@ OpenApiRouter<AppState>` nested at `/api/v1`, `split_for_parts()` gives
 both the router and the document. `router()` adds a `fallback` and
 `method_not_allowed_fallback` returning `ApiError` (`not_found`,
 `method_not_allowed`), `SetResponseHeaderLayer::overriding` for the two
-headers, and `TraceLayer::new_for_http()` (default span: no headers).
+headers, and `TraceLayer::new_for_http()` with `DefaultMakeSpan` and
+`DefaultOnResponse` at `Level::INFO` (so the default `info` filter logs
+method, path, status and latency; headers stay out, the default).
 The OpenAPI info: title `Unified Mailbox API`, version from
 `CARGO_PKG_VERSION`. A `Modify` adds the `bearer` HTTP security scheme
 and sets it as the global requirement; `/health` and `/pairing` declare
@@ -490,13 +502,14 @@ and sets it as the global requirement; `/health` and `/pairing` declare
 (`HealthDto`, `status` a one-value enum `ok`).
 
 `src/bin/openapi.rs` prints `openapi().to_pretty_json()` and a newline.
-`mise.toml`:
+`mise.toml` (through a temporary file, so a failed build does not empty
+the contract):
 
 ```toml
 [tasks.openapi]
 description = "Regenerate api/openapi.json from the http crate"
 dir = "{{config_root}}/server"
-run = "cargo run -q -p http --bin openapi > ../api/openapi.json"
+run = "cargo run -q -p http-api --bin openapi > ../api/openapi.json.tmp && mv ../api/openapi.json.tmp ../api/openapi.json"
 ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -519,20 +532,22 @@ run = "cargo run -q -p http --bin openapi > ../api/openapi.json"
     `concat!(env!("CARGO_MANIFEST_DIR"), "/../../../api/openapi.json")`
     equals `serde_json::to_value(openapi())`; the failure message says
     `run: mise run openapi`.
-  - `public_routes_declare_no_security`: in `openapi()`, `/api/v1/health`
-    has `security: [{}]`-equivalent (empty requirement), the document's
-    global security is `bearer`.
+  - `public_routes_declare_no_security`: with `doc =
+    serde_json::to_value(openapi())`, `doc["security"] ==
+    json!([{"bearer": []}])`, `doc["components"]["securitySchemes"]["bearer"]["scheme"]
+    == "bearer"`, and `doc["paths"]["/api/v1/health"]["get"]["security"]
+    == json!([{}])`. Task 5 adds `/api/v1/pairing` to it.
 
 - [ ] **Step 2: Run them and see them fail**
 
-Run: `cd server && cargo test -p http`
+Run: `cd server && cargo test -p http-api`
 Expected: compile errors.
 
 - [ ] **Step 3: Implement** the crate as above (no device routes yet).
 
 - [ ] **Step 4: Generate the contract and run the tests**
 
-Run: `mise run openapi && cd server && cargo test -p http`
+Run: `mise run openapi && cd server && cargo test -p http-api`
 Expected: `api/openapi.json` created; PASS.
 
 - [ ] **Step 5: `mise run ci`, then commit**
@@ -544,7 +559,7 @@ git commit -m "feat(http): serve /api/v1 with one error format and generate the 
 
 ---
 
-### Task 6: Device routes and bearer authentication
+### Task 5: Device routes and bearer authentication
 
 **Files:**
 - Create: `server/crates/http/src/auth.rs`, `src/devices.rs`,
@@ -553,7 +568,7 @@ git commit -m "feat(http): serve /api/v1 with one error format and generate the 
   (regenerated)
 
 **Interfaces:**
-- Consumes: Task 5 `AppState`, `ApiError`, `ApiJson`, `ApiPath`.
+- Consumes: Task 4 `AppState`, `ApiError`, `ApiJson`, `ApiPath`.
 - Produces:
   - `pub struct CurrentDevice(pub DeviceId)` implementing
     `FromRequestParts<AppState>`: reads `Authorization`, requires the
@@ -590,11 +605,15 @@ git commit -m "feat(http): serve /api/v1 with one error format and generate the 
     alone, `"Bearer <valid minus last char>"` → 401 each.
   - `lowercase_scheme_and_extra_spaces_accepted`: `"bearer <valid>"` and
     `"Bearer   <valid>"` → 200.
-  - `revoked_token_401`.
+  - `revoked_token_401`: a token whose device was revoked (through
+    `RevokeDevice`) → 401.
+  - extend `public_routes_declare_no_security` (Task 4) with
+    `doc["paths"]["/api/v1/pairing"]["post"]["security"] == json!([{}])`.
 
 `tests/devices.rs`:
 
-  - `pair_flow`: create a code through the use case (first device),
+  - `pair_flow`: create a code through `state.create_pairing_code`
+    (first device, `None`),
     `POST /pairing {"code": "<lower-case display form>", "name": " Phone "}`
     → 201 with a token starting `um_`; `GET /devices` with it → one
     device named `Phone`, `current: true`, `last_seen_at` set,
@@ -620,7 +639,7 @@ git commit -m "feat(http): serve /api/v1 with one error format and generate the 
 
 - [ ] **Step 2: Run them and see them fail**
 
-Run: `cd server && cargo test -p http`
+Run: `cd server && cargo test -p http-api`
 Expected: the new tests fail (routes missing → 404).
 
 - [ ] **Step 3: Implement `auth.rs` and `devices.rs`**, register the
@@ -628,7 +647,7 @@ Expected: the new tests fail (routes missing → 404).
 
 - [ ] **Step 4: Regenerate and run**
 
-Run: `mise run openapi && cd server && cargo test -p http`
+Run: `mise run openapi && cd server && cargo test -p http-api`
 Expected: PASS, `contract_is_current` included.
 
 - [ ] **Step 5: `mise run ci`, then commit**
@@ -640,20 +659,21 @@ git commit -m "feat(api): pair, list and revoke devices with bearer tokens"
 
 ---
 
-### Task 7: `app` serves, `LISTEN_ADDR` and `pair-code`
+### Task 6: `app` serves, `LISTEN_ADDR` and `pair-code`
 
 **Files:**
 - Modify: `server/crates/app/src/config.rs` (field `listen_addr:
   SocketAddr`, parser `socket_addr`), `server/crates/app/src/main.rs`,
-  `server/crates/app/Cargo.toml` (`http`, `chrono`, `getrandom`,
-  `axum`), `server/Cargo.toml` (tokio features `net`, `signal`)
+  `server/crates/app/Cargo.toml` (`http-api`, `ports`, `chrono`,
+  `getrandom`, `axum`), `server/Cargo.toml` (tokio features `net`,
+  `signal`)
 - Create: `server/crates/app/src/cli.rs`, `server/crates/app/src/system.rs`
 - Modify: `server/crates/app/tests/startup.rs`
 - Modify: `README.md`, `.env.example`
 
 **Interfaces:**
-- Consumes: Task 4 `impl DeviceRepository for Store`, `Store::close(&self)`;
-  Task 5 `http::AppState::new`, `http::router`; Task 3 `Deps`,
+- Consumes: Task 3 `impl DeviceRepository for Store`, `Store::close(&self)`;
+  Task 4 `http_api::AppState::new`, `http_api::router`; Task 2 `Deps`,
   `CreatePairingCode`.
 - Produces:
   - `system::SystemClock` (`chrono::Utc::now`), `system::OsSecrets`
@@ -669,7 +689,8 @@ usage: unified-mailbox [pair-code]
   pair-code      print a one-time code to pair a new device, then exit
 ```
 
-`main` flow: read config → logging → `prepare_dirs` → `Store::open` →
+`main` flow: parse the arguments first (before reading the
+configuration) → read config → logging → `prepare_dirs` → `Store::open` →
 `Arc<Store>` → `Deps`; then either `serve` (bind
 `tokio::net::TcpListener` on `listen_addr`; on error print
 `LISTEN_ADDR: cannot listen on <addr>: <err>` to stderr and exit 1; log
@@ -682,6 +703,8 @@ then `store.close().await`, exit 0) or `pair-code` (execute
 Pairing code: 04HM-ASW9
 Valid until 2026-01-01T00:10:00Z (10 minutes, single use).
 ```
+
+(The date with `to_rfc3339_opts(SecondsFormat::Secs, true)`.)
 
 then close the store, exit 0). A parse error prints the message and
 `USAGE` to stderr, exit 2.
@@ -717,7 +740,8 @@ headers, body) -> (u16, String)`; the server stopped with `kill -TERM
   - `port_in_use`: hold a `TcpListener` on a port, start the server on
     it → exit 1, stderr contains `LISTEN_ADDR`.
   - `unknown_argument`: `unified-mailbox serve` → exit 2, stderr
-    contains `usage:`.
+    contains `usage:`, and no `d/` directory is created (arguments are
+    parsed before anything else).
   - keep `invalid_variables_listed` and
     `fatal_error_shown_when_logs_filter_it_out` unchanged.
 
@@ -764,4 +788,5 @@ git add server README.md .env.example
 git commit -m "feat(app): serve the API, add LISTEN_ADDR and the pair-code command"
 ```
 
-Footer of this last commit: `Closes: #13`.
+Footer of this last commit: `Closes: #13`. The layering test needs no
+change: `http-api` and `app` are outer crates it does not constrain.
