@@ -34,19 +34,62 @@ mise install
 
 ## Usage and configuration
 
-To be written with the first server code.
+Run the server from `server/`:
+
+```bash
+cargo run -p app
+```
+
+For now it reads its configuration, opens the store and exits; the HTTP
+API comes next (#13).
+
+### Configuration
+
+The server reads its configuration once, at startup, from environment
+variables. A `.env` file in the working directory is read too, if there
+is one, and a variable set in the real environment wins over the same
+one in `.env`. Copy `.env.example` into the directory you run the server
+from (`server/.env` with the command above) to start.
+
+- Names are exact and upper case: `dry_run` is not `DRY_RUN`, and is
+  ignored.
+- An unset variable, or one set to an empty value, takes its default.
+  Values are trimmed.
+- The server checks every variable at startup. If any is invalid, it
+  prints all of them, one per line, and exits with status 1.
+- Booleans accept `true`/`false`, `t`/`f`, `1`/`0`, `yes`/`no`, `y`/`n`
+  and `on`/`off`, in any case.
+- In `.env`, `$NAME` and `${NAME}` are replaced by the variable's value,
+  unquoted or in double quotes. Put a value holding a `$` in single
+  quotes to keep it as written.
+- A malformed `.env` stops the server with the line number only, never
+  the line's content.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DATA_DIR` | `./data` | Directory of the database (`unified-mailbox.db`) and, by default, of the key file. Created with mode `0700` when missing. |
+| `KEY_FILE` | `$DATA_DIR/secret.key` | The secret key file (see below). Its directory must exist. |
+| `DRY_RUN` | `true` | Change nothing in the mailboxes, except actions the user confirmed. |
+| `SPAM_THRESHOLD` | `90` | Spam or phishing confidence, from 0 to 100, at or above which a mail goes to the junk folder. |
+| `PROTECT_KNOWN_SENDERS` | `true` | Never send to junk a mail from a sender the user knows and that passed DMARC. |
+| `ARCHIVE_CATEGORIES` | empty | Comma-separated tag keys (such as `newsletter,promotion`) whose mails are archived once classified. |
+| `RUST_LOG` | `info` | Log filter, in [`tracing-subscriber` `EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) syntax, such as `info,sqlite=debug`. |
+
+Each later feature adds its variables to this table and to
+`.env.example`.
 
 ### Data files
 
 The server keeps its state in one SQLite database (with its `-wal` and
-`-shm` files beside it), created with mode `0600` at the first start.
-Its path comes from the configuration (#12).
+`-shm` files beside it), created with mode `0600` at the first start, in
+`DATA_DIR`.
 
 ### Secret key
 
 The OAuth tokens and IMAP passwords of the connected accounts are
-encrypted in the database with a 32-byte key kept in its own file. Its
-path comes from the configuration (#12).
+encrypted in the database with a 32-byte key kept in its own file,
+`KEY_FILE`. Set it outside `DATA_DIR` to keep the key on another disk or
+in another backup.
 
 - The server creates the file at its first start, with mode `0600`, and
   logs that it did. It refuses to start if the file exists with another
