@@ -14,12 +14,15 @@ path = "src/main.rs"
 [dependencies]
 application.workspace = true
 domain.workspace = true
+dotenvy.workspace = true
 sqlite.workspace = true
-thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
 cargo_metadata = "0.23"
+tempfile.workspace = true
 
 [lints]
 workspace = true

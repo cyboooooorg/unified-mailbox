@@ -1,1 +1,4 @@
 /server/target/
+.env
+/data/
+/server/data/

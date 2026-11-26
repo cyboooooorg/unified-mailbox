@@ -34,8 +34,11 @@ dependencies = [
  "application",
  "cargo_metadata",
  "domain",
+ "dotenvy",
  "sqlite",
- "thiserror",
+ "tempfile",
+ "tokio",
+ "tracing",
  "tracing-subscriber",
 ]
 
