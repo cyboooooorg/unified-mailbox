@@ -72,6 +72,18 @@ environment variable.
 - `insert_pairing_code` first deletes the codes that are used or expired.
 - A stored name or date that no longer parses is a `RepositoryError`.
 
+## Jobs
+
+- `impl JobRepository for Store`: table `jobs` (kind, status, counters,
+  optional total, error code, `created_at`, `finished_at`). There is no
+  `updated_at`: the adapter has no clock and nothing reads it.
+- `status` is checked by `CHECK`: `running`, `succeeded`, `failed` or
+  `interrupted`. Counters are INTEGER, converted from and to `u64`; a
+  stored negative value is a `RepositoryError`.
+- `interrupt_running` marks the jobs left `running` by a stopped server;
+  `delete_finished_before` prunes the finished ones and never touches a
+  running job.
+
 ## Search
 
 - `mails_fts` is an FTS5 index over the `subject`, `sender`,

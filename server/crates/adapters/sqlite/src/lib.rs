@@ -4,6 +4,7 @@
 mod devices;
 #[cfg(test)]
 mod fts_tests;
+mod jobs;
 #[cfg(test)]
 mod schema_tests;
 mod secret;
