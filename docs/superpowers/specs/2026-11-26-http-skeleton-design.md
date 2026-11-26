@@ -97,7 +97,7 @@ All under `/api/v1`. Bodies are JSON.
   is true for the device that made the request.
 - A device may revoke itself; its next request gets a 401.
 - `AuthenticateDevice` returns the caller's `DeviceId`; the
-  authentication layer puts it in the request extensions. `current` is
+  `CurrentDevice` extractor hands it to the handler. `current` is
   computed in the DTO conversion; `CreatePairingCode` takes it as
   `created_by`.
 - `POST /pairing` with an unknown, used or expired code answers 400
@@ -170,8 +170,10 @@ The codes are part of the contract (an enum in `openapi.json`).
 - `http` (directory `crates/http`, package `http-api`: a package
   named `http` would clash with the `http` crate axum depends on): the
   router, the DTOs and their conversions, the error type, an
-  authentication layer that calls `AuthenticateDevice` and puts the
-  device id in the request extensions, and `openapi()`. It depends on
+  `CurrentDevice` extractor that calls `AuthenticateDevice` (every
+  protected handler takes it; a test walks the contract and requires a
+  401 without a token on every route but `/health` and `/pairing`), and
+  `openapi()`. It depends on
   `application`, never on `sqlite`.
 - `app`: `LISTEN_ADDR`, the wiring, the server, the subcommand.
 
