@@ -1,7 +1,7 @@
 //! SQLite adapter: opens the database, runs the migrations and encrypts
-//! account secrets. Repositories are added with the use cases that need
-//! them.
+//! account secrets, and implements the repositories of the ports.
 
+mod devices;
 #[cfg(test)]
 mod fts_tests;
 #[cfg(test)]

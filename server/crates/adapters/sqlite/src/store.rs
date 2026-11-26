@@ -72,7 +72,7 @@ impl Store {
     }
 
     /// Lets SQLite refresh its statistics, then closes both pools.
-    pub async fn close(self) {
+    pub async fn close(&self) {
         if let Err(err) = sqlx::query("PRAGMA optimize").execute(&self.write).await {
             tracing::warn!(error = %err, "PRAGMA optimize failed");
         }

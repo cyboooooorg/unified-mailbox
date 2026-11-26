@@ -9,3 +9,8 @@ run = [
   "cargo clippy --workspace --all-targets --locked -- -D warnings",
   "cargo test --workspace --locked",
 ]
+
+[tasks.openapi]
+description = "Regenerate api/openapi.json from the http crate"
+dir = "{{config_root}}/server"
+run = "cargo run -q -p http-api --bin openapi > ../api/openapi.json.tmp && mv ../api/openapi.json.tmp ../api/openapi.json"

@@ -1,0 +1,82 @@
+use http_api::openapi;
+use serde_json::{Value, json};
+
+#[test]
+fn contract_is_current() {
+    let committed: Value = serde_json::from_str(
+        &std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../api/openapi.json"
+        ))
+        .expect("api/openapi.json exists; run: mise run openapi"),
+    )
+    .expect("api/openapi.json is JSON");
+    assert_eq!(
+        committed,
+        serde_json::to_value(openapi()).unwrap(),
+        "api/openapi.json is stale; run: mise run openapi"
+    );
+}
+
+#[test]
+fn public_routes_declare_no_security() {
+    let doc = serde_json::to_value(openapi()).unwrap();
+    assert_eq!(doc["security"], json!([{"bearer": []}]));
+    assert_eq!(
+        doc["components"]["securitySchemes"]["bearer"]["scheme"],
+        "bearer"
+    );
+    assert_eq!(
+        doc["paths"]["/api/v1/health"]["get"]["security"],
+        json!([{}])
+    );
+    assert_eq!(
+        doc["paths"]["/api/v1/pairing"]["post"]["security"],
+        json!([{}])
+    );
+}
+
+#[test]
+fn error_codes_are_an_enum_in_the_contract() {
+    let doc = serde_json::to_value(openapi()).unwrap();
+    assert_eq!(
+        doc["components"]["schemas"]["ErrorCode"]["enum"],
+        json!([
+            "invalid_pairing_code",
+            "unauthorized",
+            "not_found",
+            "method_not_allowed",
+            "payload_too_large",
+            "unsupported_media_type",
+            "invalid_request",
+            "internal"
+        ])
+    );
+}
+
+#[test]
+fn contract_is_user_facing() {
+    let doc = serde_json::to_value(openapi()).unwrap();
+    let mut ids = Vec::new();
+    for (path, item) in doc["paths"].as_object().unwrap() {
+        for (method, op) in item.as_object().unwrap() {
+            ids.push(format!("{method} {path} {}", op["operationId"]));
+        }
+    }
+    ids.sort();
+    assert_eq!(
+        ids,
+        [
+            r#"delete /api/v1/devices/{id} "revoke_device""#,
+            r#"get /api/v1/devices "list_devices""#,
+            r#"get /api/v1/health "get_health""#,
+            r#"post /api/v1/devices/pairing-codes "create_pairing_code""#,
+            r#"post /api/v1/pairing "pair_device""#,
+        ]
+    );
+    assert!(!doc.to_string().contains("Debug"));
+    let required = doc["components"]["schemas"]["DeviceDto"]["required"]
+        .as_array()
+        .unwrap();
+    assert!(required.iter().any(|f| f == "last_seen_at"));
+}

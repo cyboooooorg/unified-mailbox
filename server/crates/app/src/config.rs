@@ -7,6 +7,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use domain::{SpamConfidence, SpamPolicy, TagKey};
@@ -18,6 +19,7 @@ const DATABASE_FILE: &str = "unified-mailbox.db";
 const KEY_FILE_NAME: &str = "secret.key";
 const DEFAULT_SPAM_THRESHOLD: u8 = 90;
 const DEFAULT_LOG_FILTER: &str = "info";
+const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8000";
 
 /// Everything the server reads from its configuration.
 #[derive(Clone, Debug)]
@@ -29,6 +31,8 @@ pub struct Config {
     pub dry_run: bool,
     /// A `tracing-subscriber` `EnvFilter` directive, already validated.
     pub log_filter: String,
+    /// Where the HTTP API listens.
+    pub listen_addr: SocketAddr,
 }
 
 /// One invalid variable.
@@ -81,6 +85,7 @@ impl Config {
         let protect_known_senders = parser.bool("PROTECT_KNOWN_SENDERS", true);
         let archive = parser.tag_keys("ARCHIVE_CATEGORIES");
         let log_filter = parser.log_filter("RUST_LOG");
+        let listen_addr = parser.socket_addr("LISTEN_ADDR", DEFAULT_LISTEN_ADDR);
 
         if !parser.errors.is_empty() {
             return Err(ConfigErrors(parser.errors));
@@ -98,6 +103,7 @@ impl Config {
             },
             dry_run,
             log_filter,
+            listen_addr,
         })
     }
 }
@@ -194,6 +200,24 @@ impl Parser<'_> {
         keys
     }
 
+    /// A socket address with a port, such as `127.0.0.1:8000` or `[::1]:8000`.
+    fn socket_addr(&mut self, name: &'static str, default: &str) -> SocketAddr {
+        let fallback: SocketAddr = default.parse().expect("default is a socket address");
+        let Some(value) = self.get(name) else {
+            return fallback;
+        };
+        if let Ok(addr) = value.parse() {
+            return addr;
+        }
+        let value = value.to_owned();
+        self.fail(
+            name,
+            &value,
+            "a socket address with a port, such as 127.0.0.1:8000 or [::1]:8000",
+        );
+        fallback
+    }
+
     fn log_filter(&mut self, name: &'static str) -> String {
         let Some(value) = self.get(name) else {
             return DEFAULT_LOG_FILTER.to_owned();
@@ -238,6 +262,28 @@ mod tests {
         assert!(config.spam.protect_known_senders);
         assert!(config.spam.archive.is_empty());
         assert_eq!(config.log_filter, "info");
+        assert_eq!(config.listen_addr, "127.0.0.1:8000".parse().unwrap());
+    }
+
+    #[test]
+    fn listen_addr_parsed() {
+        let config = Config::from_vars(&vars(&[("LISTEN_ADDR", " [::1]:9000 ")])).unwrap();
+        assert_eq!(config.listen_addr, "[::1]:9000".parse().unwrap());
+    }
+
+    #[test]
+    fn listen_addr_invalid() {
+        for value in [
+            "localhost",
+            "127.0.0.1",
+            "localhost:8000",
+            "127.0.0.1:99999",
+        ] {
+            let errs = errors(&[("LISTEN_ADDR", value)]);
+            assert_eq!(errs.len(), 1, "{value}");
+            assert_eq!(errs[0].variable, "LISTEN_ADDR");
+            assert!(errs[0].to_string().contains(value), "{}", errs[0]);
+        }
     }
 
     #[test]
@@ -255,6 +301,7 @@ mod tests {
             ("PROTECT_KNOWN_SENDERS", "  "),
             ("ARCHIVE_CATEGORIES", " "),
             ("RUST_LOG", "  "),
+            ("LISTEN_ADDR", " "),
         ]))
         .unwrap();
         assert_defaults(&config);
