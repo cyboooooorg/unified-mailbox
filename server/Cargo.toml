@@ -23,6 +23,7 @@ domain = { path = "crates/domain" }
 ports = { path = "crates/ports" }
 application = { path = "crates/application" }
 sqlite = { path = "crates/adapters/sqlite" }
+events-memory = { path = "crates/adapters/events" }
 http-api = { path = "crates/http" }
 axum = { version = "0.8", features = ["macros"] }
 tower-http = { version = "0.6", features = ["trace", "set-header"] }
@@ -43,7 +44,8 @@ getrandom = { version = "0.3", features = ["std"] }
 sha2 = "0.10"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
 tempfile = "3"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zeroize = { version = "1", features = ["derive"] }
