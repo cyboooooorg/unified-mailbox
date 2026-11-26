@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use application::Deps;
-use application::testing::{FixedClock, InMemoryDevices, SeqSecrets};
+use application::testing::{FixedClock, InMemoryDevices, InMemoryJobs, RecordingBus, SeqSecrets};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, Response};
@@ -31,6 +31,8 @@ pub fn harness_with() -> (Harness, Arc<InMemoryDevices>) {
         repo: repo.clone(),
         clock: clock.clone(),
         secrets: Arc::new(SeqSecrets::new()),
+        jobs: Arc::new(InMemoryJobs::new()),
+        events: Arc::new(RecordingBus::new()),
     });
     let harness = Harness {
         router: http_api::router(state.clone()),
