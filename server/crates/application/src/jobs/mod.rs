@@ -252,6 +252,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn throttle_counts_from_the_last_publish() {
+        let f = fixture();
+        let handle = f.start(None).await;
+        let clock = f.clock.clone();
+        handle
+            .run(|progress| async move {
+                // t: published; t+200 ms: throttled; t+400 ms: 400 ms after
+                // the last publish, so published.
+                progress.step(true).await;
+                clock.advance(TimeDelta::milliseconds(200));
+                progress.step(true).await;
+                clock.advance(TimeDelta::milliseconds(200));
+                progress.step(true).await;
+                Ok(())
+            })
+            .await;
+        let events = f.job_events();
+        // creation, first step, third step, end.
+        assert_eq!(events.len(), 4);
+        assert_eq!(events[1].progress.done, 1);
+        assert_eq!(events[2].progress.done, 3);
+        assert_eq!(events[2].status, JobStatus::Running);
+        assert_eq!(f.jobs.save_count(), 2);
+    }
+
+    #[tokio::test]
     async fn save_failure_does_not_stop_the_job() {
         let f = fixture();
         let handle = f.start(None).await;
@@ -323,6 +349,10 @@ mod tests {
         f.jobs
             .insert(finished(10, TimeDelta::days(30) + TimeDelta::seconds(1)));
         f.jobs.insert(finished(11, TimeDelta::days(29)));
+        // "older than 30 days": exactly 30 days is kept, and so is just under.
+        f.jobs.insert(finished(12, TimeDelta::days(30)));
+        f.jobs
+            .insert(finished(13, TimeDelta::days(30) - TimeDelta::seconds(1)));
 
         let recovered = RecoverJobs::new(f.deps.clone()).execute().await.unwrap();
         assert_eq!(
@@ -338,5 +368,7 @@ mod tests {
         let get = GetJob::new(f.deps.clone());
         assert!(get.execute(JobId::new(10)).await.unwrap().is_none());
         assert!(get.execute(JobId::new(11)).await.unwrap().is_some());
+        assert!(get.execute(JobId::new(12)).await.unwrap().is_some());
+        assert!(get.execute(JobId::new(13)).await.unwrap().is_some());
     }
 }
