@@ -46,12 +46,12 @@
 - [ ] **Step 1: Write the failing tests** in `config.rs`'s test module, with `tempfile::tempdir()`:
   - `client_dir_unset_or_empty_is_none`: no variable → `None`; `("CLIENT_DIR", "  ")` → `None`.
   - `client_dir_valid`: a temp dir holding `index.html` → `Some(path)` (value trimmed).
-  - `client_dir_missing`, `client_dir_is_a_file`, `client_dir_without_index`: each → one error with `variable == "CLIENT_DIR"` and a message naming the problem ("not a directory", "has no index.html"), without echoing anything but the path.
+  - `client_dir_missing`, `client_dir_is_a_file`, `client_dir_without_index`: each → one error with `variable == "CLIENT_DIR"` whose message names the problem (`does not exist`, `is not a directory`, `has no index.html`) and quotes only the path.
   - `assert_defaults` also asserts `client_dir == None`.
 - [ ] **Step 2: Run** `cargo test -p app config` from `server/`. Expected: compile failure (`client_dir` unknown).
 - [ ] **Step 3: Implement** `Parser::client_dir(&mut self, name: &'static str) -> Option<PathBuf>` with `std::fs::metadata` (`is_dir`, then `join("index.html").is_file()`), errors through `self.fail`; add `client_dir` to `Config` and `from_vars`.
 - [ ] **Step 4: Run** `cargo test -p app config`. Expected: PASS.
-- [ ] **Step 5: Document**: `.env.example` gains a commented `# CLIENT_DIR=` block ("Directory of the built web client, served on every path outside /api. Unset: the API only."); the README table gains the row `CLIENT_DIR | empty | ...`, saying it must hold `index.html` and pointing to the web client section added in Task 6.
+- [ ] **Step 5: Document**: `.env.example` gains a commented `# CLIENT_DIR=` block ("Directory of the built web client, served on every path outside /api. Unset: the API only."); the README table gains the row `CLIENT_DIR | empty | ...`, saying it must hold `index.html` (Task 6 links it to the web client section it adds).
 - [ ] **Step 6: Commit** `feat(app): read CLIENT_DIR, the web client directory` (`Refs: #15`).
 
 ### Task 2: Serve the client next to the API
@@ -95,14 +95,14 @@ Routing and headers are the spec's "Server: serving the client" section. Impleme
 - Modify: `mise.toml`, `.github/workflows/server.yml`, `.gitignore`, `CLAUDE.md` (Checks), `README.md` (Development)
 
 **Interfaces:**
-- Produces: `import type { paths, components } from '$lib/api/schema'`; npm scripts `dev`, `build`, `generate`, `check`, `check:contract`, `check:csp`, `lint`, `format`, `test`.
+- Produces: `import type { paths, components } from '$lib/api/schema'`; npm scripts `dev`, `build`, `generate`, `check`, `check:contract`, `check:csp`, `lint`, `format`, `test` (`vitest run`: one run, no watch, so `npm test` and `npm test -- <path>` work everywhere).
 
-- [ ] **Step 1: Scaffold** with `npx sv create client` (minimal, TypeScript, ESLint, Prettier, Vitest), then pin Node LTS in `mise.toml` (`node = "<current LTS>"`), commit `package-lock.json`.
+- [ ] **Step 1: Scaffold** with `npx sv create client` run non-interactively (minimal template, TypeScript; add ESLint, Prettier and Vitest unit tests with `npx sv add`; check `--help` for the flags), then pin Node LTS in `mise.toml` (`node = "<current LTS>"`), commit `package-lock.json`.
 - [ ] **Step 2: Configure** `adapter-static` with `fallback: 'index.html'`; `+layout.ts` exports `ssr = false` and `prerender = false`; `kit.csp = { mode: 'hash', directives: { 'default-src': ['self'], 'script-src': ['self'], 'connect-src': ['self'], 'img-src': ['self', 'data:'], 'object-src': ['none'], 'base-uri': ['none'], 'form-action': ['self'] } }`; Vite dev proxy `/api` → `process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:8000'`.
-- [ ] **Step 3: Contract scripts**: `generate` runs `openapi-typescript ../api/openapi.json -o src/lib/api/schema.d.ts`; `check-contract.mjs` generates into a temp file and exits 1 with "schema.d.ts is stale: run npm run generate" when it differs from the committed one.
+- [ ] **Step 3: Contract scripts**: `generate` runs `openapi-typescript ../api/openapi.json -o src/lib/api/schema.d.ts`; `check-contract.mjs` generates into a temp file and exits 1 with "schema.d.ts is stale: run npm run generate" when it differs from the committed one. `schema.d.ts` is listed in `.prettierignore` and the ESLint ignores: it stays exactly as generated, so `lint` and `check:contract` cannot disagree.
 - [ ] **Step 4: Verify the contract check** fails when stale: edit one character in `schema.d.ts`, run `npm run check:contract` → exit 1; restore, run → exit 0.
 - [ ] **Step 5: CSP check**: `check-csp.mjs` reads `build/index.html` and exits 1 unless it holds a `Content-Security-Policy` `<meta>` whose `script-src` has at least one `'sha256-` source and no `'unsafe-inline'`. Run `npm run build && npm run check:csp`. Expected: exit 0. If SvelteKit emits no hash for the fallback page, stop and report: the spec's alternative (build-written hashes sent by the server) needs a design note.
-- [ ] **Step 6: Wire the checks**: in `mise.toml`, split into `ci:server` (today's commands) and `ci:client` (`dir = client`: `npm run check:contract`, `npm run check`, `npm run lint`, `npm test -- --run`, `npm run build`, `npm run check:csp`), with `ci` depending on both; the workflow adds `actions/setup-node` cache keyed on `client/package-lock.json` (or the mise-installed Node with an npm cache step) and `npm ci` in `client/` before `mise run ci`; `.gitignore` adds `/client/node_modules/`, `/client/build/`, `/client/.svelte-kit/`.
+- [ ] **Step 6: Wire the checks**: in `mise.toml`, split into `ci:server` (today's commands) and `ci:client` (`dir = client`: `npm run check:contract`, `npm run check`, `npm run lint`, `npm test`, `npm run build`, `npm run check:csp`), with `ci` depending on both; the workflow keeps `jdx/mise-action` (it now installs the pinned Node too; no `actions/setup-node`), adds an `actions/cache` step for `~/.npm` keyed on `client/package-lock.json`, and runs `npm ci` in `client/` before `mise run ci`; `.gitignore` adds `/client/node_modules/`, `/client/build/`, `/client/.svelte-kit/`.
 - [ ] **Step 7: Document**: CLAUDE.md "Checks" says `mise run ci` now runs the client checks (after `npm ci` in `client/`); README Development gains the client part (Node through mise, `npm ci`, `npm run dev` with the server running, `npm run generate` after `mise run openapi`).
 - [ ] **Step 8: Run** `mise run ci` from the repository root. Expected: PASS.
 - [ ] **Step 9: Commit** `feat(client): scaffold the SvelteKit client and its checks` (`Refs: #15`).
@@ -110,24 +110,25 @@ Routing and headers are the spec's "Server: serving the client" section. Impleme
 ### Task 4: Token store, session, API client and error messages
 
 **Files:**
-- Create: `client/src/lib/auth/token-store.ts`, `client/src/lib/auth/session.svelte.ts`, `client/src/lib/api/client.ts`, `client/src/lib/api/errors.ts`
+- Create: `client/src/lib/auth/token-store.ts`, `client/src/lib/auth/session.svelte.ts`, `client/src/lib/api/client.ts`, `client/src/lib/api/app.ts`, `client/src/lib/api/errors.ts`
 - Test: `client/src/lib/auth/token-store.test.ts`, `client/src/lib/api/client.test.ts`, `client/src/lib/api/errors.test.ts`
 
 **Interfaces:**
 - Consumes: `paths`, `components` (Task 3).
 - Produces:
-  - `interface TokenStore { get(): string | null; set(token: string): void; clear(): void }`; `localTokenStore(storage?: Storage): TokenStore` (key `unified-mailbox.token`).
-  - `session`: `{ readonly signedIn: boolean; signIn(token: string): void; signOut(): void }`, backed by a `TokenStore`; `signOut` clears the token and navigates to `/pair` (navigation injected so it is testable).
-  - `API_BASE = ''` (same origin; #58 changes it); `createApi(opts: { fetch?: typeof fetch; tokens: TokenStore; onUnauthorized: () => void }) => Client<paths>`; `api` the app-wide instance using `session.signOut`.
+  - `interface TokenStore { get(): string | null; set(token: string): void; clear(): void }`; `localTokenStore(storage?: () => Storage): TokenStore` (key `unified-mailbox.token`; the default reads `localStorage` lazily, inside the `try`, since merely accessing it can throw).
+  - In `session.svelte.ts`: `createSession(tokens: TokenStore, navigate: (path: string) => void): Session` with `Session = { readonly signedIn: boolean; readonly tokens: TokenStore; signIn(token: string): void; signOut(): void }` (`signedIn` is `$state`; `signOut` clears the token and navigates to `/pair`), and the app-wide `session = createSession(localTokenStore(), goto)`.
+  - In `client.ts` (no `$app` import, so it tests without SvelteKit): `API_BASE = ''` (same origin; #58 changes it); `createApi(opts: { fetch?: typeof fetch; tokens: TokenStore; onUnauthorized: () => void }) => Client<paths>`.
+  - In `app.ts`: `api = createApi({ tokens: session.tokens, onUnauthorized: () => session.signOut() })`.
   - `type ErrorCode = components['schemas']['ErrorCode']`; `errorMessage(code: ErrorCode): string` (a `Record<ErrorCode, string>`, so a new code fails `npm run check`); `describeError(body: unknown): string` returns the message for a well-formed `{error: {code}}` and `GENERIC_ERROR = 'Something went wrong. Try again.'` otherwise. `invalid_pairing_code` → `This code is invalid or expired.`
 
 - [ ] **Step 1: Write the failing tests**:
   - token store with a fake `Storage`: `set` then `get` returns the token; `clear` → `null`; `get returns null when storage throws` (a fake whose `getItem` throws); `set` on a throwing storage does not throw.
   - `createApi` with a fake `fetch`: `adds the bearer header` when a token exists; `no header without a token`; `a 401 clears the token and calls onUnauthorized` on `GET /api/v1/devices`; `a 401 from /api/v1/pairing does not sign out`; the request URL is `/api/v1/...` (no token in it).
   - `describeError`: the pairing code message; an unknown shape (`null`, `{}`, `{error: "x"}`) → `GENERIC_ERROR`.
-- [ ] **Step 2: Run** `npm test -- --run` in `client/`. Expected: FAIL (modules missing).
-- [ ] **Step 3: Implement** the four modules; the auth middleware is an `openapi-fetch` `Middleware` with `onRequest` (header) and `onResponse` (401 handling).
-- [ ] **Step 4: Run** `npm test -- --run && npm run check`. Expected: PASS.
+- [ ] **Step 2: Run** `npm test` in `client/`. Expected: FAIL (modules missing).
+- [ ] **Step 3: Implement** the five modules; the auth middleware is an `openapi-fetch` `Middleware` with `onRequest` (header) and `onResponse` (401 handling).
+- [ ] **Step 4: Run** `npm test && npm run check`. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(client): add the token store and the typed API client` (`Refs: #15`).
 
 ### Task 5: Event stream reader (hard: concurrency and timers, run on opus)
@@ -173,9 +174,10 @@ Behavior is the spec's "Client: event stream reader" section. Parse with `events
   - `stops without a request when the token is gone` at reconnect time.
   - `reads the token again on each attempt` (token changed between attempts).
   - `abort cancels a pending reconnect` and ends an open request; the promise resolves.
-- [ ] **Step 2: Run** `npm test -- --run src/lib/events`. Expected: FAIL.
+  - `reports its state`: `onState` sees `connecting`, `connected`, then `reconnecting` after an end, `connected` again, and `stopped` after abort or 401.
+- [ ] **Step 2: Run** `npm test -- src/lib/events`. Expected: FAIL.
 - [ ] **Step 3: Implement** `connectEvents`.
-- [ ] **Step 4: Run** `npm test -- --run && npm run check && npm run lint`. Expected: PASS.
+- [ ] **Step 4: Run** `npm test && npm run check && npm run lint`. Expected: PASS.
 - [ ] **Step 5: Commit** `feat(client): read the event stream with fetch and reconnect` (`Refs: #15`).
 
 ### Task 6: Pairing and status screens
@@ -183,23 +185,23 @@ Behavior is the spec's "Client: event stream reader" section. Parse with `events
 **Files:**
 - Create: `client/src/lib/auth/device-name.ts`, `client/src/routes/+layout.svelte`, `client/src/routes/pair/+page.svelte`, `client/README.md`
 - Modify: `client/src/routes/+page.svelte` (status page), `README.md` (Usage: web client)
-- Test: `client/src/lib/auth/device-name.test.ts`, `client/src/lib/auth/device-name-validate.test.ts` (or one file)
+- Test: `client/src/lib/auth/device-name.test.ts`
 
 **Interfaces:**
-- Consumes: `api`, `session`, `describeError` (Task 4); `connectEvents` (Task 5).
+- Consumes: `api` (`$lib/api/app`), `session`, `describeError` (Task 4); `connectEvents`, `StreamState` (Task 5).
 - Produces: `suggestDeviceName(userAgent: string): string`; `validateDeviceName(name: string): string | null` (null when valid, else the message).
 
 - [ ] **Step 1: Write the failing tests**:
   - `suggestDeviceName`: a Firefox on Linux UA → `Firefox on Linux`; Safari on iPhone → `Safari on iPhone`; empty or unknown UA → `Web browser`; the result is never over 64 characters.
   - `validateDeviceName`: `'  Phone  '` → valid; `''` and `'   '` → `Enter a name.`; 65 characters → `At most 64 characters.`; a name with `\u0007` → `No control characters.`.
-- [ ] **Step 2: Run** `npm test -- --run src/lib/auth`. Expected: FAIL.
+- [ ] **Step 2: Run** `npm test -- src/lib/auth`. Expected: FAIL.
 - [ ] **Step 3: Implement** `device-name.ts`.
 - [ ] **Step 4: Run** the same. Expected: PASS.
 - [ ] **Step 5: Build the screens**:
   - `+layout.svelte`: without a token, `goto('/pair')`; with one on `/pair`, `goto('/')`.
   - `/pair`: code and name fields, `POST /api/v1/pairing` with the trimmed code; on success `session.signIn(token)` and `goto('/')`; errors through `describeError`.
-  - `/`: loads `GET /health`, `/devices`, `/jobs` in `onConnect` (each part shows `Server unreachable` on its own failure); marks `current` devices ("This device"); `job` events upsert or drop the job when its status is no longer `running`; `device_revoked` reloads devices; a stream state indicator (`Connected` / `Reconnecting…`); `connectEvents` started in `$effect` with an `AbortController` aborted on cleanup. Plain CSS only (#77).
-- [ ] **Step 6: Verify end to end**: `cargo run -p app -- pair-code` and the server with `CLIENT_DIR=../client/build` after `npm run build`; open it, pair, see health, the device marked current, `Connected`; revoke the device with `curl -X DELETE` from another token → the page returns to `/pair`; restart the server → `Reconnecting…` then `Connected` and reloaded data. Report what was seen.
-- [ ] **Step 7: Document**: README Usage gains "Web client" (build with `npm ci && npm run build` in `client/`, set `CLIENT_DIR`, open the server address, pair with a code); `client/README.md` covers purpose, scripts, layout, how the reader follows the protocol of #14, and that style waits for #77.
+  - `/`: loads `GET /health`, `/devices`, `/jobs` in `onConnect` (each part shows `Server unreachable` on its own failure); marks `current` devices ("This device"); `job` events upsert a `running` job and drop one whose status is `succeeded`, `failed` or `interrupted`; `device_revoked` reloads devices; a stream state indicator (`Connected` / `Reconnecting…`); `connectEvents` started in `$effect` with an `AbortController` aborted on cleanup. Plain CSS only (#77).
+- [ ] **Step 6: Verify end to end** with a throwaway `DATA_DIR` in the scratchpad: `npm run build` in `client/`; from `server/`, `CLIENT_DIR=../client/build cargo run -p app`; open `http://127.0.0.1:8000` (chrome-devtools tools if the session has them, otherwise hand these steps to the user); pair with a code from `cargo run -p app -- pair-code` → status page, health, the device marked "This device", `Connected`. Pair a second device with `curl` (README "Pairing a device") and revoke the browser's device with `curl -X DELETE /api/v1/devices/{id}` using that second token → the page returns to `/pair`. Pair again, stop and restart the server → `Reconnecting…`, then `Connected` with the data reloaded. Report what was seen.
+- [ ] **Step 7: Document**: README Usage gains "Web client" (build with `npm ci && npm run build` in `client/`, set `CLIENT_DIR`, open the server address, pair with a code), and the `CLIENT_DIR` row links to it; `client/README.md` covers purpose, scripts, layout, how the reader follows the protocol of #14, and that style waits for #77.
 - [ ] **Step 8: Run** `mise run ci`. Expected: PASS.
 - [ ] **Step 9: Commit** `feat(client): add the pairing and status screens` (`Closes: #15`).
