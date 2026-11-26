@@ -130,11 +130,15 @@ impl Parser<'_> {
             return default;
         };
         match value.to_ascii_lowercase().as_str() {
-            "true" | "1" | "yes" | "on" => true,
-            "false" | "0" | "no" | "off" => false,
+            "true" | "t" | "1" | "yes" | "y" | "on" => true,
+            "false" | "f" | "0" | "no" | "n" | "off" => false,
             _ => {
                 let value = value.to_owned();
-                self.fail(name, &value, "a boolean (true/false, 1/0, yes/no, on/off)");
+                self.fail(
+                    name,
+                    &value,
+                    "a boolean (true/false, t/f, 1/0, yes/no, y/n, on/off)",
+                );
                 default
             }
         }
@@ -269,11 +273,11 @@ mod tests {
 
     #[test]
     fn bool_forms() {
-        for value in ["true", "TRUE", "1", "yes", "On"] {
+        for value in ["true", "TRUE", "1", "yes", "On", "t", "Y"] {
             let config = Config::from_vars(&vars(&[("DRY_RUN", value)])).unwrap();
             assert!(config.dry_run, "{value}");
         }
-        for value in ["false", "0", "no", "OFF"] {
+        for value in ["false", "0", "no", "OFF", "f", "N"] {
             let config = Config::from_vars(&vars(&[("DRY_RUN", value)])).unwrap();
             assert!(!config.dry_run, "{value}");
         }
@@ -299,7 +303,15 @@ mod tests {
             let config = Config::from_vars(&vars(&[("SPAM_THRESHOLD", value)])).unwrap();
             assert_eq!(config.spam.threshold.get(), expected);
         }
-        for value in ["-1", "101", "abc", "9.5"] {
+        for value in [
+            "-1",
+            "101",
+            "256",
+            "-256",
+            "99999999999999999999",
+            "abc",
+            "9.5",
+        ] {
             let errs = errors(&[("SPAM_THRESHOLD", value)]);
             assert_eq!(errs.len(), 1, "{value}");
             assert_eq!(errs[0].variable, "SPAM_THRESHOLD");
@@ -321,6 +333,14 @@ mod tests {
             assert_eq!(errs.len(), 1, "{value}");
             assert_eq!(errs[0].variable, "ARCHIVE_CATEGORIES");
         }
+    }
+
+    #[test]
+    fn archive_categories_each_bad_item_reported() {
+        let errs = errors(&[("ARCHIVE_CATEGORIES", "newsletter,a b,c_d")]);
+        assert_eq!(errs.len(), 2);
+        assert!(errs[0].to_string().contains("a b"), "{}", errs[0]);
+        assert!(errs[1].to_string().contains("c_d"), "{}", errs[1]);
     }
 
     #[test]

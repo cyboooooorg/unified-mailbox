@@ -48,7 +48,8 @@ API comes next (#13).
 The server reads its configuration once, at startup, from environment
 variables. A `.env` file in the working directory is read too, if there
 is one, and a variable set in the real environment wins over the same
-one in `.env`. Copy `.env.example` to `.env` to start.
+one in `.env`. Copy `.env.example` into the directory you run the server
+from (`server/.env` with the command above) to start.
 
 - Names are exact and upper case: `dry_run` is not `DRY_RUN`, and is
   ignored.
@@ -56,8 +57,13 @@ one in `.env`. Copy `.env.example` to `.env` to start.
   Values are trimmed.
 - The server checks every variable at startup. If any is invalid, it
   prints all of them, one per line, and exits with status 1.
-- Booleans accept `true`/`false`, `1`/`0`, `yes`/`no` and `on`/`off`,
-  in any case.
+- Booleans accept `true`/`false`, `t`/`f`, `1`/`0`, `yes`/`no`, `y`/`n`
+  and `on`/`off`, in any case.
+- In `.env`, `$NAME` and `${NAME}` are replaced by the variable's value,
+  unquoted or in double quotes. Put a value holding a `$` in single
+  quotes to keep it as written.
+- A malformed `.env` stops the server with the line number only, never
+  the line's content.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

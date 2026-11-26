@@ -4,15 +4,52 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::Path;
+use std::{fmt, fs, io};
+
+/// Why `.env` could not be read. It never quotes the file's content: a
+/// line that fails to parse may hold a secret.
+#[derive(Debug)]
+pub enum DotenvError {
+    Io(io::Error),
+    /// The line number, when it could be found.
+    Malformed(Option<usize>),
+}
+
+impl fmt::Display for DotenvError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DotenvError::Io(err) => write!(f, "cannot read: {err}"),
+            DotenvError::Malformed(Some(line)) => write!(f, "malformed line {line}"),
+            DotenvError::Malformed(None) => write!(f, "malformed"),
+        }
+    }
+}
 
 /// Reads the `.env` file at `path`. A missing file gives no variables; an
 /// unreadable or malformed one is an error.
-pub fn read_dotenv(path: &Path) -> Result<Vec<(String, String)>, dotenvy::Error> {
-    match dotenvy::from_path_iter(path) {
-        Ok(iter) => iter.collect(),
-        Err(err) if err.not_found() => Ok(Vec::new()),
-        Err(err) => Err(err),
-    }
+pub fn read_dotenv(path: &Path) -> Result<Vec<(String, String)>, DotenvError> {
+    let content = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(DotenvError::Io(err)),
+    };
+    dotenvy::from_read_iter(content.as_bytes())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| match err {
+            dotenvy::Error::LineParse(text, _) => DotenvError::Malformed(line_of(&content, &text)),
+            dotenvy::Error::Io(err) => DotenvError::Io(err),
+            _ => DotenvError::Malformed(None),
+        })
+}
+
+/// The 1-based number of the first line holding `text`, which dotenvy
+/// reports as the rest of the line from where parsing failed.
+fn line_of(content: &str, text: &str) -> Option<usize> {
+    let first = text.lines().next().filter(|first| !first.is_empty())?;
+    content
+        .lines()
+        .position(|line| line.contains(first))
+        .map(|index| index + 1)
 }
 
 /// Lays the process environment over the `.env` variables: a real
@@ -90,6 +127,20 @@ mod tests {
         let path = dir.path().join(".env");
         fs::write(&path, "NOT VALID\n").unwrap();
         assert!(read_dotenv(&path).is_err());
+    }
+
+    #[test]
+    fn malformed_dotenv_hides_the_value() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".env");
+        fs::write(
+            &path,
+            "# comment\nDRY_RUN=false\nSOME_TOKEN=invented-0000 oops\n",
+        )
+        .unwrap();
+        let message = read_dotenv(&path).unwrap_err().to_string();
+        assert!(!message.contains("invented-0000"), "{message}");
+        assert!(message.contains("line 3"), "{message}");
     }
 
     #[test]

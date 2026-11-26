@@ -34,7 +34,7 @@ declared in `[workspace.dependencies]`.
   database `DATA_DIR/unified-mailbox.db`, `DRY_RUN=true`,
   `SPAM_THRESHOLD=90` (0..=100), `PROTECT_KNOWN_SENDERS=true`,
   `ARCHIVE_CATEGORIES` empty, `RUST_LOG=info`.
-- Booleans: `true false 1 0 yes no on off`, case-insensitive.
+- Booleans: `true t false f 1 0 yes y no n on off`, case-insensitive.
 - Every error names the variable, the value and what was expected; all
   errors are reported together; exit status 1.
 - English for code, comments, logs, docs. Invented test data only.

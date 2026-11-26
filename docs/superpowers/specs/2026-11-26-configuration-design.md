@@ -59,7 +59,9 @@ rules are few and the map makes tests trivial.
 
 1. `dotenvy` reads `.env` from the working directory into a map, if the
    file exists. A missing file is fine; an unreadable or malformed one is
-   an error.
+   an error, reported with its line number and never the line's content,
+   which may hold a secret. `dotenvy` expands `$NAME` outside single
+   quotes (python-dotenv only `${NAME}`): the README says so.
 2. The process environment is laid over it: a real variable beats
    `.env`, as in Mailbot (pydantic-settings).
 3. `Config::from_vars(&HashMap<String, String>)` parses the map and
@@ -75,8 +77,9 @@ case-insensitive lookup is dropped.
 
 - An unset variable, or one set to the empty string (after trimming),
   takes its default. No variable of this change is required.
-- Booleans accept, case-insensitively: `true`, `false`, `1`, `0`,
-  `yes`, `no`, `on`, `off` (pydantic's set). Anything else is an error.
+- Booleans accept, case-insensitively: `true`, `t`, `false`, `f`, `1`,
+  `0`, `yes`, `y`, `no`, `n`, `on`, `off` (pydantic's set). Anything else
+  is an error.
 - Integers must parse and be within the variable's bounds, inclusive.
   **Deviation from Mailbot:** Mailbot checks bounds only for values set
   from its settings page and accepts any integer from the environment.

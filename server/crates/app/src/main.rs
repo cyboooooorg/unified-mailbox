@@ -32,12 +32,14 @@ async fn main() -> ExitCode {
         .with_env_filter(EnvFilter::new(&config.log_filter))
         .init();
 
+    // Fatal errors go to stderr: a `RUST_LOG` that filters this crate out
+    // must not hide why the server stopped.
     if let Err(err) = prepare_dirs(&config) {
-        tracing::error!("{err}");
+        eprintln!("{err}");
         return ExitCode::FAILURE;
     }
     if let Err(err) = sqlite::Store::open(config.store.clone()).await {
-        tracing::error!(error = %err, "cannot open the store");
+        eprintln!("cannot open the store: {err}");
         return ExitCode::FAILURE;
     }
     tracing::info!(
@@ -114,6 +116,32 @@ mod tests {
             let mode = fs::metadata(&data_dir).unwrap().permissions().mode();
             assert_eq!(mode & 0o777, 0o700);
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prepare_dirs_keeps_existing_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let data_dir = tmp.path().join("data");
+        fs::create_dir(&data_dir).unwrap();
+        fs::set_permissions(&data_dir, fs::Permissions::from_mode(0o755)).unwrap();
+        prepare_dirs(&config(&data_dir, None)).unwrap();
+        let mode = fs::metadata(&data_dir).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o755);
+    }
+
+    #[test]
+    fn prepare_dirs_rejects_key_parent_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let parent = tmp.path().join("not-a-dir");
+        fs::write(&parent, "").unwrap();
+        let err = prepare_dirs(&config(
+            &tmp.path().join("data"),
+            Some(&parent.join("secret.key")),
+        ))
+        .unwrap_err();
+        assert!(err.contains("KEY_FILE"), "{err}");
     }
 
     #[test]
