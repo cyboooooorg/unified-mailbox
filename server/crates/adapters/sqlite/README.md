@@ -1,9 +1,10 @@
 # sqlite
 
 The SQLite adapter of the server: it opens the database, runs the
-migrations and encrypts the account secrets. The repositories (accounts,
-mails, tags, trusted senders, audit) are added here with the use cases
-that need them. Only this crate and `app` know `sqlx`.
+migrations and encrypts the account secrets. It implements the
+repositories of `ports`, added with the use cases that need them (so far
+`DeviceRepository`; accounts, mails, tags, trusted senders and audit
+follow). Only this crate and `app` know `sqlx`.
 
 ## Usage
 
@@ -35,7 +36,7 @@ environment variable.
   Use `INSERT … ON CONFLICT … DO UPDATE` instead, everywhere.
 - The database file is created with mode `0600`; SQLite gives the
   `-wal` and `-shm` files the same mode. An existing file keeps its mode.
-- `Store::close` runs `PRAGMA optimize`, then closes both pools.
+- `Store::close(&self)` runs `PRAGMA optimize`, then closes both pools.
 
 ## Migrations
 
@@ -58,6 +59,18 @@ environment variable.
 - Booleans: INTEGER 0 or 1. Enums: the domain's stable codes, checked by
   `CHECK` constraints. Lists: JSON arrays in TEXT.
 - No user-facing text: errors and audit entries hold codes.
+
+## Devices
+
+- `impl DeviceRepository for Store`: tables `devices` and
+  `pairing_codes`, which hold only hashes (token, code), never a secret.
+- `redeem_pairing_code` is one transaction on the single-connection
+  write pool: the `UPDATE pairing_codes SET used_at …` guarded by
+  `used_at IS NULL AND expires_at > now` gates the device insert, so two
+  concurrent redemptions yield one device and a failed insert leaves the
+  code unused.
+- `insert_pairing_code` first deletes the codes that are used or expired.
+- A stored name or date that no longer parses is a `RepositoryError`.
 
 ## Search
 

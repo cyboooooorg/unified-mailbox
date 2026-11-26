@@ -1310,10 +1310,12 @@ dependencies = [
 name = "sqlite"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chacha20poly1305",
  "chrono",
  "domain",
  "getrandom 0.3.4",
+ "ports",
  "sqlx",
  "tempfile",
  "thiserror",
