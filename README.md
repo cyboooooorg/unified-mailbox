@@ -119,6 +119,14 @@ not reach an I/O crate (`tokio`, `sqlx`, `reqwest`, `axum`…), even
 transitively, and may depend only on the inner workspace crates. When an
 adapter brings a new I/O crate, add it to `IO_CRATES` in that test.
 
+The API contract is `api/openapi.json`, generated from the `http-api`
+crate. After any change to a route or a DTO, regenerate it in the same
+commit; a test fails when the committed file is stale:
+
+```bash
+mise run openapi
+```
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or

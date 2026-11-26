@@ -6,6 +6,7 @@ members = [
   "crates/domain",
   "crates/ports",
   "crates/application",
+  "crates/http",
   "crates/app",
   "crates/adapters/*",
 ]
@@ -22,6 +23,13 @@ domain = { path = "crates/domain" }
 ports = { path = "crates/ports" }
 application = { path = "crates/application" }
 sqlite = { path = "crates/adapters/sqlite" }
+http-api = { path = "crates/http" }
+axum = { version = "0.8", features = ["macros"] }
+tower-http = { version = "0.6", features = ["trace", "set-header"] }
+utoipa = { version = "5", features = ["chrono"] }
+utoipa-axum = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 async-trait = "0.1"
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
