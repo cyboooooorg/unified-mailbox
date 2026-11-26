@@ -4,8 +4,10 @@
 mod auth;
 mod devices;
 mod error;
+mod events;
 mod extract;
 mod health;
+mod jobs;
 mod state;
 
 use axum::Router;
@@ -18,6 +20,8 @@ use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityRequirement
 use utoipa::{Modify, OpenApi as _};
 use utoipa_axum::router::OpenApiRouter;
 
+use events::EventDiscriminator;
+
 pub use auth::CurrentDevice;
 pub use error::{ApiError, ErrorBody, ErrorCode, ErrorDetail};
 pub use extract::{ApiJson, ApiPath};
@@ -29,8 +33,15 @@ pub use state::AppState;
         title = "Unified Mailbox API",
         description = "API of the Unified Mailbox server. Every route but /health and /pairing requires a per-device bearer token."
     ),
-    modifiers(&Bearer),
-    components(schemas(ErrorBody, ErrorDetail, ErrorCode))
+    modifiers(&Bearer, &EventDiscriminator),
+    components(schemas(
+        ErrorBody,
+        ErrorDetail,
+        ErrorCode,
+        jobs::JobDto,
+        jobs::JobStatusDto,
+        events::EventDto
+    ))
 )]
 struct ApiDoc;
 
@@ -58,8 +69,13 @@ impl Modify for Bearer {
 }
 
 fn api() -> OpenApiRouter<AppState> {
-    OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .nest("/api/v1", health::routes().merge(devices::routes()))
+    OpenApiRouter::with_openapi(ApiDoc::openapi()).nest(
+        "/api/v1",
+        health::routes()
+            .merge(devices::routes())
+            .merge(jobs::routes())
+            .merge(events::routes()),
+    )
 }
 
 /// The whole application, layers included.

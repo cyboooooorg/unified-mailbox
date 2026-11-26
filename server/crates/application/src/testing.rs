@@ -6,8 +6,13 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use chrono::{DateTime, TimeDelta, Utc};
-use domain::{Device, DeviceId};
-use ports::{Clock, DeviceRepository, NewDevice, NewPairingCode, RepositoryError, SecretGenerator};
+use domain::{Device, DeviceId, Event, Job, JobId, JobProgress, JobStatus};
+use futures_core::stream::BoxStream;
+use futures_util::StreamExt;
+use ports::{
+    BusMessage, Clock, DeviceRepository, EventBus, JobRepository, NewDevice, NewJob,
+    NewPairingCode, RepositoryError, SecretGenerator,
+};
 
 /// A clock that stays at the instant it is given until moved.
 #[derive(Debug)]
@@ -221,5 +226,170 @@ impl DeviceRepository for InMemoryDevices {
             }
             None => Ok(false),
         }
+    }
+}
+
+#[derive(Debug, Default)]
+struct JobsState {
+    jobs: Vec<Job>,
+    saves: usize,
+    fail_writes: bool,
+}
+
+/// A [`JobRepository`] in memory. Ids start at 1.
+#[derive(Debug, Default)]
+pub struct InMemoryJobs(Mutex<JobsState>);
+
+impl InMemoryJobs {
+    pub fn new() -> InMemoryJobs {
+        InMemoryJobs::default()
+    }
+
+    /// Makes every write (`create`, `save_progress`, `finish`,
+    /// `interrupt_running`, `delete_finished_before`) fail, or work again.
+    pub fn fail_writes(&self, fail: bool) {
+        self.0.lock().unwrap().fail_writes = fail;
+    }
+
+    /// How many times `save_progress` was called, failed calls included.
+    pub fn save_count(&self) -> usize {
+        self.0.lock().unwrap().saves
+    }
+
+    /// Stores a job as it is, to set up a state.
+    pub fn insert(&self, job: Job) {
+        self.0.lock().unwrap().jobs.push(job);
+    }
+}
+
+#[async_trait]
+impl JobRepository for InMemoryJobs {
+    async fn create(&self, job: NewJob) -> Result<Job, RepositoryError> {
+        let mut state = self.0.lock().unwrap();
+        if state.fail_writes {
+            return Err(failure("secret detail of the creation"));
+        }
+        let id = JobId::new(state.jobs.iter().map(|j| j.id.get()).max().unwrap_or(0) + 1);
+        let stored = Job {
+            id,
+            kind: job.kind,
+            status: JobStatus::Running,
+            progress: JobProgress {
+                done: 0,
+                failed: 0,
+                total: job.total,
+            },
+            error: None,
+            created_at: job.created_at,
+            finished_at: None,
+        };
+        state.jobs.push(stored.clone());
+        Ok(stored)
+    }
+
+    async fn save_progress(&self, id: JobId, progress: JobProgress) -> Result<(), RepositoryError> {
+        let mut state = self.0.lock().unwrap();
+        state.saves += 1;
+        if state.fail_writes {
+            return Err(failure("secret detail of the save"));
+        }
+        if let Some(job) = state.jobs.iter_mut().find(|j| j.id == id) {
+            job.progress = progress;
+        }
+        Ok(())
+    }
+
+    async fn finish(
+        &self,
+        id: JobId,
+        status: JobStatus,
+        progress: JobProgress,
+        error: Option<String>,
+        at: DateTime<Utc>,
+    ) -> Result<(), RepositoryError> {
+        let mut state = self.0.lock().unwrap();
+        if state.fail_writes {
+            return Err(failure("secret detail of the end"));
+        }
+        if let Some(job) = state.jobs.iter_mut().find(|j| j.id == id) {
+            job.status = status;
+            job.progress = progress;
+            job.error = error;
+            job.finished_at = Some(at);
+        }
+        Ok(())
+    }
+
+    async fn get(&self, id: JobId) -> Result<Option<Job>, RepositoryError> {
+        let state = self.0.lock().unwrap();
+        Ok(state.jobs.iter().find(|j| j.id == id).cloned())
+    }
+
+    async fn list_running(&self) -> Result<Vec<Job>, RepositoryError> {
+        let state = self.0.lock().unwrap();
+        let mut running: Vec<Job> = state
+            .jobs
+            .iter()
+            .filter(|j| j.status == JobStatus::Running)
+            .cloned()
+            .collect();
+        running.sort_by_key(|j| (j.created_at, j.id.get()));
+        Ok(running)
+    }
+
+    async fn interrupt_running(&self, at: DateTime<Utc>) -> Result<u64, RepositoryError> {
+        let mut state = self.0.lock().unwrap();
+        if state.fail_writes {
+            return Err(failure("secret detail of the interruption"));
+        }
+        let mut count = 0;
+        for job in state
+            .jobs
+            .iter_mut()
+            .filter(|j| j.status == JobStatus::Running)
+        {
+            job.status = JobStatus::Interrupted;
+            job.finished_at = Some(at);
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    async fn delete_finished_before(&self, before: DateTime<Utc>) -> Result<u64, RepositoryError> {
+        let mut state = self.0.lock().unwrap();
+        if state.fail_writes {
+            return Err(failure("secret detail of the purge"));
+        }
+        let kept = state.jobs.len();
+        state
+            .jobs
+            .retain(|j| !j.finished_at.is_some_and(|at| at < before));
+        Ok((kept - state.jobs.len()) as u64)
+    }
+}
+
+/// An [`EventBus`] that records what is published. Its `subscribe` returns
+/// an empty stream.
+#[derive(Debug, Default)]
+pub struct RecordingBus(Mutex<Vec<Event>>);
+
+impl RecordingBus {
+    pub fn new() -> RecordingBus {
+        RecordingBus::default()
+    }
+
+    /// Everything published so far, in order.
+    pub fn events(&self) -> Vec<Event> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl EventBus for RecordingBus {
+    fn publish(&self, event: Event) {
+        self.0.lock().unwrap().push(event);
+    }
+
+    fn subscribe(&self) -> BoxStream<'static, BusMessage> {
+        futures_util::stream::empty().boxed()
     }
 }

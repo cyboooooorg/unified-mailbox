@@ -1,7 +1,7 @@
-use domain::DeviceId;
+use domain::{DeviceId, Event};
 use ports::RepositoryError;
 
-use super::Deps;
+use crate::Deps;
 
 /// Revokes a device: its token stops working at its next request. The
 /// device's row stays.
@@ -12,9 +12,14 @@ impl RevokeDevice {
         RevokeDevice(deps)
     }
 
-    /// `false` when the device is unknown or already revoked.
+    /// Publishes [`Event::DeviceRevoked`] so the device's streams close.
+    /// `false` (and no event) when the device is unknown or already revoked.
     pub async fn execute(&self, id: DeviceId) -> Result<bool, RepositoryError> {
         let now = self.0.clock.now();
-        self.0.repo.revoke(id, now).await
+        let revoked = self.0.repo.revoke(id, now).await?;
+        if revoked {
+            self.0.events.publish(Event::DeviceRevoked(id));
+        }
+        Ok(revoked)
     }
 }

@@ -11,7 +11,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use application::{CreatePairingCode, Deps};
+use application::{CreatePairingCode, Deps, RecoverJobs};
 use chrono::SecondsFormat;
 use cli::Command;
 use config::Config;
@@ -75,6 +75,8 @@ async fn main() -> ExitCode {
         repo: store.clone(),
         clock: Arc::new(system::SystemClock),
         secrets: Arc::new(system::OsSecrets),
+        jobs: store.clone(),
+        events: Arc::new(events_memory::MemoryBus::new(events_memory::CAPACITY)),
     };
 
     let code = match command {
@@ -96,10 +98,31 @@ async fn serve(config: &Config, deps: Deps) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // After binding: a second server started by mistake on the same data
+    // directory fails to bind and leaves the live server's jobs alone.
+    // Before serving: what was running died with the previous process.
+    match RecoverJobs::new(deps.clone()).execute().await {
+        Ok(recovered) => tracing::info!(
+            interrupted = recovered.interrupted,
+            deleted = recovered.deleted,
+            "jobs recovered"
+        ),
+        Err(err) => {
+            eprintln!("cannot recover the jobs: {err}");
+            return ExitCode::FAILURE;
+        }
+    }
     tracing::info!(addr = %config.listen_addr, "listening");
-    let app = http_api::router(http_api::AppState::new(deps));
+    // Kept alive for the server's lifetime: dropping it would end the
+    // streams. The graceful shutdown sends `true` on it first, so open
+    // `/events` streams end and the server can finish.
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let app = http_api::router(http_api::AppState::new(deps, shutdown_rx));
     match axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            let _ = shutdown_tx.send(true);
+        })
         .await
     {
         Ok(()) => {

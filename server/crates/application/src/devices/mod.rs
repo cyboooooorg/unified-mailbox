@@ -1,12 +1,11 @@
 //! Device use cases: a paired device holds a bearer token, stored only as
 //! its hash; a new device pairs with a one-time code.
 
-use std::sync::Arc;
-
-use ports::{Clock, DeviceRepository, SecretGenerator};
+use crate::Deps;
 
 mod authenticate_device;
 mod create_pairing_code;
+mod device_is_active;
 mod list_devices;
 mod pair_device;
 mod revoke_device;
@@ -14,18 +13,11 @@ mod token;
 
 pub use authenticate_device::*;
 pub use create_pairing_code::*;
+pub use device_is_active::*;
 pub use list_devices::*;
 pub use pair_device::*;
 pub use revoke_device::*;
 pub use token::*;
-
-/// What the device use cases need, injected by `app`.
-#[derive(Clone)]
-pub struct Deps {
-    pub repo: Arc<dyn DeviceRepository>,
-    pub clock: Arc<dyn Clock>,
-    pub secrets: Arc<dyn SecretGenerator>,
-}
 
 #[cfg(test)]
 mod tests {
@@ -35,12 +27,13 @@ mod tests {
     use domain::{DeviceId, DeviceNameError};
 
     use super::*;
-    use crate::testing::{FixedClock, InMemoryDevices, SeqSecrets};
+    use crate::testing::{FixedClock, InMemoryDevices, InMemoryJobs, RecordingBus, SeqSecrets};
 
     struct Fixture {
         deps: Deps,
         repo: Arc<InMemoryDevices>,
         clock: Arc<FixedClock>,
+        bus: Arc<RecordingBus>,
     }
 
     fn fixture() -> Fixture {
@@ -48,12 +41,20 @@ mod tests {
         let clock = Arc::new(FixedClock::new(
             Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
         ));
+        let bus = Arc::new(RecordingBus::new());
         let deps = Deps {
             repo: repo.clone(),
             clock: clock.clone(),
             secrets: Arc::new(SeqSecrets::new()),
+            jobs: Arc::new(InMemoryJobs::new()),
+            events: bus.clone(),
         };
-        Fixture { deps, repo, clock }
+        Fixture {
+            deps,
+            repo,
+            clock,
+            bus,
+        }
     }
 
     impl Fixture {
@@ -217,6 +218,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn revoke_publishes_device_revoked() {
+        let f = fixture();
+        let paired = f.pair_new("Phone").await;
+        f.revoke(paired.device.id).await;
+        assert!(matches!(
+            f.bus.events().as_slice(),
+            [domain::Event::DeviceRevoked(id)] if *id == paired.device.id
+        ));
+    }
+
+    #[tokio::test]
+    async fn revoke_unknown_publishes_nothing() {
+        let f = fixture();
+        assert!(!f.revoke(DeviceId::new(999)).await);
+        assert!(f.bus.events().is_empty());
+    }
+
+    #[tokio::test]
     async fn last_seen_throttled() {
         let f = fixture();
         let token = f.pair_new("Phone").await.token;
@@ -252,6 +271,20 @@ mod tests {
         let listed = ListDevices::new(f.deps.clone()).execute().await.unwrap();
         let ids: Vec<_> = listed.iter().map(|d| d.id).collect();
         assert_eq!(ids, vec![second.device.id]);
+    }
+
+    #[tokio::test]
+    async fn device_is_active_only_while_paired_and_not_revoked() {
+        let f = fixture();
+        let first = f.pair_new("Phone").await;
+        let second = f.pair_new("Tablet").await;
+        f.revoke(first.device.id).await;
+        let is_active = DeviceIsActive::new(f.deps.clone());
+        assert!(is_active.execute(second.device.id).await.unwrap());
+        assert!(!is_active.execute(first.device.id).await.unwrap());
+        assert!(!is_active.execute(DeviceId::new(999)).await.unwrap());
+        f.repo.fail_reads(true);
+        assert!(is_active.execute(second.device.id).await.is_err());
     }
 
     #[tokio::test]

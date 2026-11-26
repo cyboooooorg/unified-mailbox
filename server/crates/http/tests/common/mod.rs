@@ -1,13 +1,15 @@
 #![allow(dead_code)]
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use application::Deps;
-use application::testing::{FixedClock, InMemoryDevices, SeqSecrets};
+use application::testing::{FixedClock, InMemoryDevices, InMemoryJobs, SeqSecrets};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, Response};
 use chrono::{TimeZone, Utc};
+use events_memory::MemoryBus;
 use http_api::AppState;
 use tower::ServiceExt;
 
@@ -15,6 +17,9 @@ pub struct Harness {
     pub router: Router,
     pub clock: Arc<FixedClock>,
     pub state: AppState,
+    pub jobs: Arc<InMemoryJobs>,
+    pub bus: Arc<MemoryBus>,
+    pub shutdown: tokio::sync::watch::Sender<bool>,
 }
 
 pub fn harness() -> Harness {
@@ -23,19 +28,39 @@ pub fn harness() -> Harness {
 
 /// A harness and its repository, to make the storage fail.
 pub fn harness_with() -> (Harness, Arc<InMemoryDevices>) {
+    harness_parts(64)
+}
+
+/// A harness whose event bus keeps only `capacity` events per subscriber.
+pub fn harness_with_bus_capacity(capacity: usize) -> Harness {
+    harness_parts(capacity).0
+}
+
+fn harness_parts(capacity: usize) -> (Harness, Arc<InMemoryDevices>) {
     let repo = Arc::new(InMemoryDevices::new());
     let clock = Arc::new(FixedClock::new(
         Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
     ));
-    let state = AppState::new(Deps {
-        repo: repo.clone(),
-        clock: clock.clone(),
-        secrets: Arc::new(SeqSecrets::new()),
-    });
+    let jobs = Arc::new(InMemoryJobs::new());
+    let bus = Arc::new(MemoryBus::new(capacity));
+    let (shutdown, shutdown_rx) = tokio::sync::watch::channel(false);
+    let state = AppState::new(
+        Deps {
+            repo: repo.clone(),
+            clock: clock.clone(),
+            secrets: Arc::new(SeqSecrets::new()),
+            jobs: jobs.clone(),
+            events: bus.clone(),
+        },
+        shutdown_rx,
+    );
     let harness = Harness {
         router: http_api::router(state.clone()),
         clock,
         state,
+        jobs,
+        bus,
+        shutdown,
     };
     (harness, repo)
 }
@@ -136,4 +161,16 @@ pub async fn text(response: Response<Body>) -> String {
         .unwrap()
         .to_bytes();
     String::from_utf8(bytes.to_vec()).unwrap()
+}
+
+/// The next frame of a streaming body as text; `None` once the body has
+/// ended. Panics when no frame arrives `within` the delay, so a test
+/// waiting for the end cannot pass on a silent stream.
+pub async fn next_chunk(body: &mut Body, within: Duration) -> Option<String> {
+    let frame = tokio::time::timeout(within, http_body_util::BodyExt::frame(body))
+        .await
+        .unwrap_or_else(|_| panic!("no frame within {within:?}"))?
+        .expect("body error");
+    let data = frame.into_data().expect("a data frame");
+    Some(String::from_utf8(data.to_vec()).unwrap())
 }

@@ -32,6 +32,7 @@ server/                  # Cargo workspace
       claude-code/       # impl Classifier through the Claude Code CLI
       sqlite/            # impl the repositories (sqlx, migrations)
       ntfy/              # impl Notifier
+      events/            # package events-memory: in-memory EventBus
     http/                # inbound adapter: axum routes, DTOs, SSE, OpenAPI
     app/                 # binary: config, wiring, background tasks
 api/openapi.json         # the contract, generated from server/crates/http

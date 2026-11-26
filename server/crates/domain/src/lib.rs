@@ -9,6 +9,8 @@
 //! - [`tag`]: tags with a stable key derived once from the name.
 //! - [`classification`]: what Claude says about a mail.
 //! - [`device`]: paired devices, device names and pairing codes.
+//! - [`job`]: jobs, their kind, status and progress.
+//! - [`event`]: [`Event`], what the server pushes to the clients.
 //! - [`moves`]: the moves the code may apply. [`Move`] has no `Delete`
 //!   by design: nothing deletes a mail permanently.
 //! - [`decision`]: [`decide`], the rule from a classification to a move.
@@ -22,6 +24,8 @@ pub mod account;
 pub mod classification;
 pub mod decision;
 pub mod device;
+pub mod event;
+pub mod job;
 pub mod mail;
 pub mod moves;
 pub mod tag;
@@ -30,6 +34,8 @@ pub use account::*;
 pub use classification::*;
 pub use decision::*;
 pub use device::*;
+pub use event::*;
+pub use job::*;
 pub use mail::*;
 pub use moves::*;
 pub use tag::*;

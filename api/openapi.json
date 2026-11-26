@@ -142,6 +142,45 @@
         }
       }
     },
+    "/api/v1/events": {
+      "get": {
+        "summary": "Streams the server's events as server-sent events.",
+        "description": "The stream starts with `retry: 3000`, then sends each event as one\n`data:` line holding an `EventDto` as JSON, and a `: ping` comment when\nidle. It ends when the caller's device is revoked (its reconnection then\ngets a 401), after a `resync` event, and when the server shuts down.\n\nThe client reads it with `fetch` and the bearer token (`EventSource`\ncannot send the header). On every connect and reconnect, and on every\n`resync` event, it reloads what it shows (and `GET /jobs/{id}` for a job\nit follows): events only tell what changed since. After `resync` the\nstream ends: the client reconnects.",
+        "operationId": "stream_events",
+        "responses": {
+          "200": {
+            "description": "A stream of server-sent events: `retry: 3000` first, then one `data:` line per event holding an `EventDto` as JSON, and a `: ping` comment when idle",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "summary": "Liveness probe; needs no token.",
@@ -161,6 +200,107 @@
         "security": [
           {}
         ]
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "summary": "Lists the running jobs, oldest first.",
+        "operationId": "list_jobs",
+        "responses": {
+          "200": {
+            "description": "The running jobs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}": {
+      "get": {
+        "summary": "Returns one job, running or finished.",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/pairing": {
@@ -325,6 +465,68 @@
           }
         }
       },
+      "EventDto": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A job was created, progressed or finished.",
+            "required": [
+              "job",
+              "type"
+            ],
+            "properties": {
+              "job": {
+                "$ref": "#/components/schemas/JobDto"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "job"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A device was revoked: a hint to reload the device list.",
+            "required": [
+              "device_id",
+              "type"
+            ],
+            "properties": {
+              "device_id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "device_revoked"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The subscriber missed events: reload what is shown. The stream ends\nright after it; reconnect.",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "resync"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "One event of the stream, the JSON of a `data:` line, tagged by `type`.",
+        "discriminator": {
+          "propertyName": "type"
+        }
+      },
       "HealthDto": {
         "type": "object",
         "required": [
@@ -345,6 +547,83 @@
         "type": "string",
         "enum": [
           "ok"
+        ]
+      },
+      "JobDto": {
+        "type": "object",
+        "description": "A long operation and its progress.",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "done",
+          "failed",
+          "total",
+          "error",
+          "created_at",
+          "finished_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "done": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Items processed with success.",
+            "minimum": 0
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Always present, `null` unless the job failed."
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Items that failed.",
+            "minimum": 0
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Always present, `null` while the job runs."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatusDto"
+          },
+          "total": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Always present, `null` while the number of items is unknown.",
+            "minimum": 0
+          }
+        }
+      },
+      "JobStatusDto": {
+        "type": "string",
+        "description": "Where a job stands.",
+        "enum": [
+          "running",
+          "succeeded",
+          "failed",
+          "interrupted"
         ]
       },
       "PairingCodeDto": {

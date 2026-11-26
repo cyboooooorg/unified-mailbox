@@ -17,6 +17,7 @@ axum.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 domain.workspace = true
 dotenvy.workspace = true
+events-memory.workspace = true
 getrandom.workspace = true
 http-api.workspace = true
 ports.workspace = true
