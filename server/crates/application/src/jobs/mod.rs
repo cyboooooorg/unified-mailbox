@@ -229,6 +229,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn set_total_within_interval_is_not_published_but_ends_in_the_job() {
+        let f = fixture();
+        let handle = f.start(None).await;
+        let id = handle.id();
+        let clock = f.clock.clone();
+        handle
+            .run(|progress| async move {
+                progress.step(true).await;
+                clock.advance(TimeDelta::milliseconds(100));
+                progress.set_total(7).await;
+                Ok(())
+            })
+            .await;
+        // creation, first step, end: `set_total` was throttled.
+        let events = f.job_events();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[1].progress.total, None);
+        assert_eq!(f.jobs.save_count(), 1);
+        assert_eq!(events[2].progress.total, Some(7));
+        assert_eq!(f.stored(id).await.progress.total, Some(7));
+    }
+
+    #[tokio::test]
     async fn save_failure_does_not_stop_the_job() {
         let f = fixture();
         let handle = f.start(None).await;

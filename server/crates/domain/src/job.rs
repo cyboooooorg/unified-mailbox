@@ -17,9 +17,9 @@ impl JobId {
     }
 }
 
-/// The kind of a job: a snake_case code of 1 to 32 characters, starting
-/// with a lower-case letter. Kinds are constants of the code, not user
-/// input: no trimming.
+/// The kind of a job: 1 to 32 lower-case letters and underscores,
+/// starting with a letter (`[a-z][a-z_]*`). Kinds are constants of the
+/// code, not user input: no trimming.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JobKind(String);
 
@@ -38,7 +38,7 @@ impl JobKind {
         }
         let mut chars = raw.chars();
         let first_ok = chars.next().is_some_and(|c| c.is_ascii_lowercase());
-        let rest_ok = chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+        let rest_ok = chars.all(|c| c.is_ascii_lowercase() || c == '_');
         if first_ok && rest_ok {
             Ok(JobKind(raw.to_owned()))
         } else {
@@ -136,8 +136,8 @@ mod tests {
     }
 
     #[test]
-    fn kind_rejects_upper_case_digit_start_and_dash() {
-        for input in ["Labels", "1abc", "_abc", "a-b"] {
+    fn kind_rejects_upper_case_digits_and_dash() {
+        for input in ["Labels", "1abc", "_abc", "a-b", "a1"] {
             assert_eq!(
                 JobKind::new(input),
                 Err(JobKindError::InvalidCharacter),

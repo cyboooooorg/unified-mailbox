@@ -90,7 +90,7 @@ impl Progress {
 
     /// One more item processed: `ok` false counts it as failed too.
     pub async fn step(&self, ok: bool) {
-        self.update(false, |progress| {
+        self.update(|progress| {
             progress.done += 1;
             if !ok {
                 progress.failed += 1;
@@ -99,23 +99,21 @@ impl Progress {
         .await;
     }
 
-    /// The number of items turned out to be `total`. Saved and published
-    /// at once.
+    /// The number of items turned out to be `total`. Throttled like
+    /// [`step`](Progress::step); the end of the job always carries it.
     pub async fn set_total(&self, total: u64) {
-        self.update(true, |progress| progress.total = Some(total))
-            .await;
+        self.update(|progress| progress.total = Some(total)).await;
     }
 
-    async fn update(&self, force: bool, change: impl FnOnce(&mut JobProgress)) {
+    async fn update(&self, change: impl FnOnce(&mut JobProgress)) {
         let now = self.deps.clock.now();
         // The lock is released before any await.
         let snapshot = {
             let mut state = self.state.lock().unwrap();
             change(&mut state.job.progress);
-            let due = force
-                || state
-                    .last_published
-                    .is_none_or(|last| now - last >= PROGRESS_INTERVAL);
+            let due = state
+                .last_published
+                .is_none_or(|last| now - last >= PROGRESS_INTERVAL);
             if !due {
                 return;
             }
