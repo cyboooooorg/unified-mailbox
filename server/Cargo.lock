@@ -1244,6 +1244,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "domain",
+ "futures-core",
  "thiserror",
 ]
 
