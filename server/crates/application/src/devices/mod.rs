@@ -232,6 +232,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn failed_last_seen_write_does_not_fail_authentication() {
+        let f = fixture();
+        let paired = f.pair_new("Phone").await;
+        f.repo.fail_touch(true);
+        assert_eq!(
+            f.authenticate(paired.token.as_str()).await,
+            Some(paired.device.id)
+        );
+        assert_eq!(f.repo.touch_count(), 1);
+    }
+
+    #[tokio::test]
     async fn list_returns_active_only() {
         let f = fixture();
         let first = f.pair_new("Phone").await;

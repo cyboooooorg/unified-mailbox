@@ -31,7 +31,11 @@ impl AuthenticateDevice {
             .last_seen_at
             .is_none_or(|seen| now - seen >= LAST_SEEN_RESOLUTION)
         {
-            self.0.repo.touch_last_seen(device.id, now).await?;
+            // The timestamp is a convenience: a failed write must not lock
+            // the device out. The error never carries the token.
+            if let Err(err) = self.0.repo.touch_last_seen(device.id, now).await {
+                tracing::warn!(error = %err, device = device.id.get(), "cannot record last_seen_at");
+            }
         }
         Ok(Some(device.id))
     }

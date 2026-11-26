@@ -20,6 +20,7 @@ domain.workspace = true
 ports.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

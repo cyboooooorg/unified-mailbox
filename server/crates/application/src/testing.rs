@@ -71,6 +71,8 @@ struct State {
     devices: Vec<StoredDevice>,
     touches: usize,
     lookups: usize,
+    fail_touch: bool,
+    fail_reads: bool,
 }
 
 /// A [`DeviceRepository`] in memory. Ids start at 1.
@@ -92,11 +94,26 @@ impl InMemoryDevices {
         self.0.lock().unwrap().lookups
     }
 
+    /// Makes `touch_last_seen` fail (or work again).
+    pub fn fail_touch(&self, fail: bool) {
+        self.0.lock().unwrap().fail_touch = fail;
+    }
+
+    /// Makes the lookups (`find_active_by_token_hash`, `list_active`) fail
+    /// (or work again).
+    pub fn fail_reads(&self, fail: bool) {
+        self.0.lock().unwrap().fail_reads = fail;
+    }
+
     /// The token hashes of every stored device, revoked ones included.
     pub fn stored_token_hashes(&self) -> Vec<String> {
         let state = self.0.lock().unwrap();
         state.devices.iter().map(|d| d.token_hash.clone()).collect()
     }
+}
+
+fn failure(detail: &str) -> RepositoryError {
+    RepositoryError(detail.into())
 }
 
 #[async_trait]
@@ -150,6 +167,9 @@ impl DeviceRepository for InMemoryDevices {
     ) -> Result<Option<Device>, RepositoryError> {
         let mut state = self.0.lock().unwrap();
         state.lookups += 1;
+        if state.fail_reads {
+            return Err(failure("secret detail of the lookup"));
+        }
         Ok(state
             .devices
             .iter()
@@ -164,6 +184,9 @@ impl DeviceRepository for InMemoryDevices {
     ) -> Result<(), RepositoryError> {
         let mut state = self.0.lock().unwrap();
         state.touches += 1;
+        if state.fail_touch {
+            return Err(failure("secret detail of the touch"));
+        }
         if let Some(d) = state.devices.iter_mut().find(|d| d.device.id == id) {
             d.device.last_seen_at = Some(at);
         }
@@ -172,6 +195,9 @@ impl DeviceRepository for InMemoryDevices {
 
     async fn list_active(&self) -> Result<Vec<Device>, RepositoryError> {
         let state = self.0.lock().unwrap();
+        if state.fail_reads {
+            return Err(failure("secret detail of the listing"));
+        }
         let mut active: Vec<Device> = state
             .devices
             .iter()
