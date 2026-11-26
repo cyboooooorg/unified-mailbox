@@ -175,11 +175,6 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_names_are_values() {
-        assert_eq!(DeviceName::new("Phone"), DeviceName::new("Phone"));
-    }
-
-    #[test]
     fn code_from_bytes_uses_crockford() {
         assert_eq!(PairingCode::from_bytes([0; 5]).as_str(), "00000000");
         assert_eq!(PairingCode::from_bytes([0xff; 5]).as_str(), "ZZZZZZZZ");

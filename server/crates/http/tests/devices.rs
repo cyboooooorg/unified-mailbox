@@ -228,3 +228,20 @@ async fn token_never_in_list() {
     assert!(!body.contains(&token), "{body}");
     assert!(!body.contains(&token[3..]), "{body}");
 }
+
+#[tokio::test]
+async fn duplicate_names_are_allowed() {
+    let h = harness();
+    let (first, token) = pair(&h, "Phone").await;
+    let (second, _) = pair(&h, "Phone").await;
+    assert_ne!(first, second);
+    let res = send_auth(&h.router, "GET", "/api/v1/devices", &token).await;
+    let list = json(res).await;
+    let names: Vec<_> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|d| (d["id"].as_i64().unwrap(), d["name"].as_str().unwrap()))
+        .collect();
+    assert_eq!(names, [(first, "Phone"), (second, "Phone")]);
+}

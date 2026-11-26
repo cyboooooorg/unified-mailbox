@@ -80,6 +80,7 @@ async fn malformed_authorization_headers() {
         format!("Bearer {truncated}"),
         format!("Bearer{token}"),
         format!("Bearer\t{token}"),
+        format!("Bearer \t{token}"),
     ] {
         let res = send_with(
             &h.router,

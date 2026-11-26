@@ -51,19 +51,3 @@ fn bearer_token(header: &str) -> Option<&str> {
 fn unauthorized() -> ApiError {
     ApiError::new(ErrorCode::Unauthorized, "missing or invalid bearer token")
 }
-
-#[cfg(test)]
-mod tests {
-    use super::bearer_token;
-
-    #[test]
-    fn parses_the_bearer_scheme() {
-        assert_eq!(bearer_token("Bearer abc"), Some("abc"));
-        assert_eq!(bearer_token("bEaReR   abc"), Some("abc"));
-        assert_eq!(bearer_token("Bearer "), None);
-        assert_eq!(bearer_token("Bearer"), None);
-        assert_eq!(bearer_token("Bearerabc"), None);
-        assert_eq!(bearer_token("Basic abc"), None);
-        assert_eq!(bearer_token("abc"), None);
-    }
-}

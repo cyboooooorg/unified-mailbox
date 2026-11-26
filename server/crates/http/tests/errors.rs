@@ -1,6 +1,6 @@
 mod common;
 
-use common::{harness, json, send};
+use common::{harness, harness_with, json, pair, send, send_auth};
 
 #[tokio::test]
 async fn health_without_token() {
@@ -36,4 +36,18 @@ async fn security_headers_on_success_and_error() {
         assert_eq!(res.headers()["cache-control"], "no-store", "{uri}");
         assert_eq!(res.headers()["x-content-type-options"], "nosniff", "{uri}");
     }
+}
+
+#[tokio::test]
+async fn storage_failure_is_500_internal_without_detail() {
+    let (h, repo) = harness_with();
+    let (_, token) = pair(&h, "Phone").await;
+    repo.fail_reads(true);
+    let res = send_auth(&h.router, "GET", "/api/v1/devices", &token).await;
+    assert_eq!(res.status(), 500);
+    let text = common::text(res).await;
+    let body: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(body["error"]["code"], "internal");
+    assert_eq!(body["error"]["message"], "internal error");
+    assert!(!text.contains("secret detail"), "{text}");
 }

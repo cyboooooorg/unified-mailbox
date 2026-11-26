@@ -35,3 +35,48 @@ fn public_routes_declare_no_security() {
         json!([{}])
     );
 }
+
+#[test]
+fn error_codes_are_an_enum_in_the_contract() {
+    let doc = serde_json::to_value(openapi()).unwrap();
+    assert_eq!(
+        doc["components"]["schemas"]["ErrorCode"]["enum"],
+        json!([
+            "invalid_pairing_code",
+            "unauthorized",
+            "not_found",
+            "method_not_allowed",
+            "payload_too_large",
+            "unsupported_media_type",
+            "invalid_request",
+            "internal"
+        ])
+    );
+}
+
+#[test]
+fn contract_is_user_facing() {
+    let doc = serde_json::to_value(openapi()).unwrap();
+    let mut ids = Vec::new();
+    for (path, item) in doc["paths"].as_object().unwrap() {
+        for (method, op) in item.as_object().unwrap() {
+            ids.push(format!("{method} {path} {}", op["operationId"]));
+        }
+    }
+    ids.sort();
+    assert_eq!(
+        ids,
+        [
+            r#"delete /api/v1/devices/{id} "revoke_device""#,
+            r#"get /api/v1/devices "list_devices""#,
+            r#"get /api/v1/health "get_health""#,
+            r#"post /api/v1/devices/pairing-codes "create_pairing_code""#,
+            r#"post /api/v1/pairing "pair_device""#,
+        ]
+    );
+    assert!(!doc.to_string().contains("Debug"));
+    let required = doc["components"]["schemas"]["DeviceDto"]["required"]
+        .as_array()
+        .unwrap();
+    assert!(required.iter().any(|f| f == "last_seen_at"));
+}

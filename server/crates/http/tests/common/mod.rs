@@ -18,19 +18,26 @@ pub struct Harness {
 }
 
 pub fn harness() -> Harness {
+    harness_with().0
+}
+
+/// A harness and its repository, to make the storage fail.
+pub fn harness_with() -> (Harness, Arc<InMemoryDevices>) {
+    let repo = Arc::new(InMemoryDevices::new());
     let clock = Arc::new(FixedClock::new(
         Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
     ));
     let state = AppState::new(Deps {
-        repo: Arc::new(InMemoryDevices::new()),
+        repo: repo.clone(),
         clock: clock.clone(),
         secrets: Arc::new(SeqSecrets::new()),
     });
-    Harness {
+    let harness = Harness {
         router: http_api::router(state.clone()),
         clock,
         state,
-    }
+    };
+    (harness, repo)
 }
 
 pub async fn send(router: &Router, method: &str, uri: &str) -> Response<Body> {
