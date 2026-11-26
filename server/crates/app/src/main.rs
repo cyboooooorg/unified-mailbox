@@ -11,7 +11,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use application::{CreatePairingCode, Deps};
+use application::{CreatePairingCode, Deps, RecoverJobs};
 use chrono::SecondsFormat;
 use cli::Command;
 use config::Config;
@@ -88,6 +88,18 @@ async fn main() -> ExitCode {
 }
 
 async fn serve(config: &Config, deps: Deps) -> ExitCode {
+    // Before binding: what was running died with the previous process.
+    match RecoverJobs::new(deps.clone()).execute().await {
+        Ok(recovered) => tracing::info!(
+            interrupted = recovered.interrupted,
+            deleted = recovered.deleted,
+            "jobs recovered"
+        ),
+        Err(err) => {
+            eprintln!("cannot recover the jobs: {err}");
+            return ExitCode::FAILURE;
+        }
+    }
     let listener = match tokio::net::TcpListener::bind(config.listen_addr).await {
         Ok(listener) => listener,
         Err(err) => {
@@ -100,20 +112,22 @@ async fn serve(config: &Config, deps: Deps) -> ExitCode {
     };
     tracing::info!(addr = %config.listen_addr, "listening");
     // Kept alive for the server's lifetime: dropping it would end the
-    // streams, and the shutdown path sends `true` on it.
+    // streams. The graceful shutdown sends `true` on it first, so open
+    // `/events` streams end and the server can finish.
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let app = http_api::router(http_api::AppState::new(deps, shutdown_rx));
     match axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            let _ = shutdown_tx.send(true);
+        })
         .await
     {
         Ok(()) => {
-            drop(shutdown_tx);
             tracing::info!("stopped");
             ExitCode::SUCCESS
         }
         Err(err) => {
-            drop(shutdown_tx);
             eprintln!("server error: {err}");
             ExitCode::FAILURE
         }

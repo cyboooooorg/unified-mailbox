@@ -278,3 +278,102 @@ fn unknown_argument() {
     assert!(stderr.contains("usage:"), "{stderr}");
     assert!(!dir.path().join("d").exists());
 }
+
+/// Pairs a device through the running server and returns its bearer token.
+fn pair_device(server: &Server, dir: &Path) -> String {
+    let out = pair_code(dir);
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    let code = stdout
+        .lines()
+        .next()
+        .and_then(|line| line.strip_prefix("Pairing code: "))
+        .expect("a pairing code")
+        .to_owned();
+    let body = format!(r#"{{"code":"{code}","name":"test phone"}}"#);
+    let (status, response) = request(
+        server.addr,
+        "POST",
+        "/api/v1/pairing",
+        &[("Content-Type", "application/json")],
+        &body,
+    )
+    .unwrap();
+    assert_eq!(status, 201, "{response}");
+    let (_, rest) = response.split_once("\"token\":\"").expect(&response);
+    rest.split('"').next().unwrap().to_owned()
+}
+
+#[test]
+fn sigint_with_open_event_stream() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut server = Server::start(dir.path());
+    let token = pair_device(&server, dir.path());
+
+    let mut stream = TcpStream::connect_timeout(&server.addr, Duration::from_secs(2)).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    let head = format!(
+        "GET /api/v1/events HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {token}\r\n\r\n",
+        server.addr
+    );
+    stream.write_all(head.as_bytes()).unwrap();
+    let mut received = String::new();
+    let mut buf = [0u8; 1024];
+    while !received.contains("retry: 3000") {
+        let n = stream.read(&mut buf).expect("read the event stream");
+        assert!(n > 0, "the stream ended early: {received:?}");
+        received.push_str(&String::from_utf8_lossy(&buf[..n]));
+    }
+
+    // The stream is still open: the shutdown must end it.
+    assert!(server.stop("INT").success());
+}
+
+#[test]
+fn running_job_interrupted_after_restart() {
+    use ports::{JobRepository, NewJob};
+
+    let dir = tempfile::tempdir().unwrap();
+    // Creates the store (database and key) the way the binary does.
+    assert!(pair_code(dir.path()).status.success());
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let id = runtime.block_on(async {
+        let store = sqlite::Store::open(sqlite::StoreConfig {
+            database: dir.path().join("d/unified-mailbox.db"),
+            key_file: dir.path().join("d/secret.key"),
+        })
+        .await
+        .unwrap();
+        let job = store
+            .create(NewJob {
+                kind: domain::JobKind::new("labels_sync").unwrap(),
+                total: Some(10),
+                created_at: chrono::Utc::now(),
+            })
+            .await
+            .unwrap();
+        store.close().await;
+        job.id
+    });
+
+    let mut server = Server::start(dir.path());
+    let token = pair_device(&server, dir.path());
+    let auth = format!("Bearer {token}");
+    let (status, body) = request(
+        server.addr,
+        "GET",
+        &format!("/api/v1/jobs/{}", id.get()),
+        &[("Authorization", &auth)],
+        "",
+    )
+    .unwrap();
+    assert_eq!(status, 200, "{body}");
+    assert!(body.contains(r#""status":"interrupted""#), "{body}");
+    assert!(!body.contains(r#""finished_at":null"#), "{body}");
+    assert!(server.terminate().success());
+}

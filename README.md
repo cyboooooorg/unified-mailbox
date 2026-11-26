@@ -113,6 +113,32 @@ as a hash: keep it. Send it as `Authorization: Bearer <token>`.
 - When every device is lost or revoked, run `pair-code` again on the
   server.
 
+### Jobs and events
+
+Long operations run as jobs. Every route is under `/api/v1` and needs the
+bearer token.
+
+- `GET /jobs` lists the running jobs, oldest first.
+- `GET /jobs/{id}` returns one job (`404` when unknown): its `status`,
+  `done`, `failed` and `total` counters, its `error` and its dates.
+- `GET /events` is a server-sent event stream.
+
+The stream starts with `retry: 3000`. Each event is one `data:` line
+holding JSON tagged by `type`: `job` (a job changed), `device_revoked`
+(reload the device list) or `resync` (events were missed). A `: ping`
+comment goes out every 15 seconds. The stream of a revoked device ends,
+and so do all streams when the server stops.
+
+The client reads the stream with `fetch` and the bearer token, never
+`EventSource` and never a token in a URL. On every connect, every
+reconnect and every `resync`, it reloads what it shows (and calls
+`GET /jobs/{id}` for a job it follows): events only tell what changed
+since.
+
+A job does not survive a restart. At startup, the jobs that were running
+become `interrupted` with their `finished_at` set. Finished jobs are
+kept for 30 days, then deleted.
+
 ### Data files
 
 The server keeps its state in one SQLite database (with its `-wal` and
