@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Unified Mailbox API",
-    "description": "Inbound HTTP adapter: axum routes under /api/v1, DTOs, error format, OpenAPI contract",
+    "description": "API of the Unified Mailbox server. Every route but /health and /pairing requires a per-device bearer token.",
     "license": {
       "name": "MIT OR Apache-2.0",
       "identifier": "MIT OR Apache-2.0"
@@ -13,7 +13,7 @@
     "/api/v1/devices": {
       "get": {
         "summary": "Lists the devices not revoked, oldest first.",
-        "operationId": "list",
+        "operationId": "list_devices",
         "responses": {
           "200": {
             "description": "The active devices",
@@ -54,7 +54,7 @@
     "/api/v1/devices/pairing-codes": {
       "post": {
         "summary": "Creates a one-time pairing code, valid ten minutes.",
-        "operationId": "create_code",
+        "operationId": "create_pairing_code",
         "responses": {
           "201": {
             "description": "A new code",
@@ -92,7 +92,7 @@
     "/api/v1/devices/{id}": {
       "delete": {
         "summary": "Revokes a device, the caller included: its token stops working.",
-        "operationId": "revoke",
+        "operationId": "revoke_device",
         "parameters": [
           {
             "name": "id",
@@ -145,7 +145,7 @@
     "/api/v1/health": {
       "get": {
         "summary": "Liveness probe; needs no token.",
-        "operationId": "health",
+        "operationId": "get_health",
         "responses": {
           "200": {
             "description": "The server is up",
@@ -166,7 +166,7 @@
     "/api/v1/pairing": {
       "post": {
         "summary": "Pairs a new device with a one-time code; needs no token.",
-        "operationId": "pair",
+        "operationId": "pair_device",
         "requestBody": {
           "content": {
             "application/json": {
@@ -254,6 +254,7 @@
           "id",
           "name",
           "created_at",
+          "last_seen_at",
           "current"
         ],
         "properties": {
@@ -275,7 +276,7 @@
               "null"
             ],
             "format": "date-time",
-            "description": "Updated at most once a minute."
+            "description": "Always present, `null` until the device is first seen. Updated at\nmost once a minute."
           },
           "name": {
             "type": "string"
@@ -348,7 +349,7 @@
       },
       "PairingCodeDto": {
         "type": "object",
-        "description": "A one-time pairing code, to show to the person pairing a new device.\nNot `Debug`: the code is a secret.",
+        "description": "A one-time pairing code, to show to the person pairing a new device.",
         "required": [
           "code",
           "expires_at"
@@ -366,7 +367,7 @@
       },
       "PairingRequest": {
         "type": "object",
-        "description": "A pairing request from a new device. Not `Debug`: the code is a secret.",
+        "description": "A pairing request from a new device.",
         "required": [
           "code",
           "name"
@@ -384,7 +385,7 @@
       },
       "PairingResponse": {
         "type": "object",
-        "description": "The new device and its bearer token, returned only here, only once.\nNot `Debug`: the token is a secret.",
+        "description": "The new device and its bearer token, returned only here, only once.",
         "required": [
           "device_id",
           "token"

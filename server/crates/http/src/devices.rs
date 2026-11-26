@@ -16,7 +16,8 @@ use crate::error::{ApiError, ErrorBody, ErrorCode};
 use crate::extract::{ApiJson, ApiPath};
 use crate::state::AppState;
 
-/// A pairing request from a new device. Not `Debug`: the code is a secret.
+// Not `Debug`: the code is a secret.
+/// A pairing request from a new device.
 #[derive(Deserialize, ToSchema)]
 pub struct PairingRequest {
     /// The one-time pairing code, as typed: case, spaces and hyphens do
@@ -27,8 +28,8 @@ pub struct PairingRequest {
     pub name: String,
 }
 
+// Not `Debug`: the token is a secret.
 /// The new device and its bearer token, returned only here, only once.
-/// Not `Debug`: the token is a secret.
 #[derive(Serialize, ToSchema)]
 pub struct PairingResponse {
     pub device_id: i64,
@@ -43,7 +44,9 @@ pub struct DeviceDto {
     pub id: i64,
     pub name: String,
     pub created_at: DateTime<Utc>,
-    /// Updated at most once a minute.
+    /// Always present, `null` until the device is first seen. Updated at
+    /// most once a minute.
+    #[schema(required = true)]
     pub last_seen_at: Option<DateTime<Utc>>,
     /// Whether this is the device that made the request.
     pub current: bool,
@@ -61,8 +64,8 @@ impl DeviceDto {
     }
 }
 
+// Not `Debug`: the code is a secret.
 /// A one-time pairing code, to show to the person pairing a new device.
-/// Not `Debug`: the code is a secret.
 #[derive(Serialize, ToSchema)]
 pub struct PairingCodeDto {
     /// `XXXX-XXXX`, Crockford base32.
@@ -71,7 +74,7 @@ pub struct PairingCodeDto {
 }
 
 /// Pairs a new device with a one-time code; needs no token.
-#[utoipa::path(post, path = "/pairing", security(()),
+#[utoipa::path(post, path = "/pairing", operation_id = "pair_device", security(()),
     request_body = PairingRequest,
     responses(
         (status = 201, description = "Paired; the token is shown only here", body = PairingResponse),
@@ -118,7 +121,7 @@ fn name_message(err: &DeviceNameError) -> String {
 }
 
 /// Lists the devices not revoked, oldest first.
-#[utoipa::path(get, path = "/devices",
+#[utoipa::path(get, path = "/devices", operation_id = "list_devices",
     responses(
         (status = 200, description = "The active devices", body = Vec<DeviceDto>),
         (status = 401, description = "Missing or invalid token", body = ErrorBody),
@@ -138,7 +141,7 @@ async fn list(
 }
 
 /// Creates a one-time pairing code, valid ten minutes.
-#[utoipa::path(post, path = "/devices/pairing-codes",
+#[utoipa::path(post, path = "/devices/pairing-codes", operation_id = "create_pairing_code",
     responses(
         (status = 201, description = "A new code", body = PairingCodeDto),
         (status = 401, description = "Missing or invalid token", body = ErrorBody),
@@ -159,7 +162,7 @@ async fn create_code(
 }
 
 /// Revokes a device, the caller included: its token stops working.
-#[utoipa::path(delete, path = "/devices/{id}",
+#[utoipa::path(delete, path = "/devices/{id}", operation_id = "revoke_device",
     params(("id" = i64, Path, description = "Device id")),
     responses(
         (status = 204, description = "Revoked"),

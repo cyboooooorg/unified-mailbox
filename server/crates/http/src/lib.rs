@@ -11,7 +11,7 @@ mod state;
 use axum::Router;
 use axum::http::{HeaderName, HeaderValue, header};
 use tower_http::set_header::SetResponseHeaderLayer;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 use utoipa::openapi::OpenApi;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityRequirement, SecurityScheme};
@@ -25,7 +25,10 @@ pub use state::AppState;
 
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    info(title = "Unified Mailbox API"),
+    info(
+        title = "Unified Mailbox API",
+        description = "API of the Unified Mailbox server. Every route but /health and /pairing requires a per-device bearer token."
+    ),
     modifiers(&Bearer),
     components(schemas(ErrorBody, ErrorDetail, ErrorCode))
 )]
@@ -78,7 +81,15 @@ pub fn router(state: AppState) -> Router {
         ))
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                // The path only: the query string and the headers may carry
+                // a secret.
+                .make_span_with(|request: &axum::http::Request<_>| {
+                    tracing::info_span!(
+                        "request",
+                        method = %request.method(),
+                        path = request.uri().path(),
+                    )
+                })
                 .on_response(DefaultOnResponse::new().level(Level::INFO)),
         )
 }

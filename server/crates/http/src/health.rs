@@ -20,7 +20,7 @@ pub struct HealthDto {
 }
 
 /// Liveness probe; needs no token.
-#[utoipa::path(get, path = "/health", security(()),
+#[utoipa::path(get, path = "/health", operation_id = "get_health", security(()),
     responses((status = 200, description = "The server is up", body = HealthDto)))]
 async fn health() -> Json<HealthDto> {
     Json(HealthDto {
