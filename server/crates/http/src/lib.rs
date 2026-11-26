@@ -1,6 +1,8 @@
 //! Inbound HTTP adapter: axum routes under `/api/v1`, the error format and
 //! the OpenAPI contract (`api/openapi.json`, `mise run openapi`).
 
+mod auth;
+mod devices;
 mod error;
 mod extract;
 mod health;
@@ -16,6 +18,7 @@ use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityRequirement
 use utoipa::{Modify, OpenApi as _};
 use utoipa_axum::router::OpenApiRouter;
 
+pub use auth::CurrentDevice;
 pub use error::{ApiError, ErrorBody, ErrorCode, ErrorDetail};
 pub use extract::{ApiJson, ApiPath};
 pub use state::AppState;
@@ -52,7 +55,8 @@ impl Modify for Bearer {
 }
 
 fn api() -> OpenApiRouter<AppState> {
-    OpenApiRouter::with_openapi(ApiDoc::openapi()).nest("/api/v1", health::routes())
+    OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .nest("/api/v1", health::routes().merge(devices::routes()))
 }
 
 /// The whole application, layers included.

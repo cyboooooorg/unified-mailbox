@@ -30,4 +30,8 @@ fn public_routes_declare_no_security() {
         doc["paths"]["/api/v1/health"]["get"]["security"],
         json!([{}])
     );
+    assert_eq!(
+        doc["paths"]["/api/v1/pairing"]["post"]["security"],
+        json!([{}])
+    );
 }

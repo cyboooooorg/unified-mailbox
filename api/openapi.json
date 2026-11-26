@@ -10,6 +10,138 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v1/devices": {
+      "get": {
+        "summary": "Lists the devices not revoked, oldest first.",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "The active devices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/pairing-codes": {
+      "post": {
+        "summary": "Creates a one-time pairing code, valid ten minutes.",
+        "operationId": "create_code",
+        "responses": {
+          "201": {
+            "description": "A new code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingCodeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{id}": {
+      "delete": {
+        "summary": "Revokes a device, the caller included: its token stops working.",
+        "operationId": "revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Device id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked"
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or already revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "summary": "Liveness probe; needs no token.",
@@ -30,10 +162,126 @@
           {}
         ]
       }
+    },
+    "/api/v1/pairing": {
+      "post": {
+        "summary": "Pairs a new device with a one-time code; needs no token.",
+        "operationId": "pair",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Paired; the token is shown only here",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown, used or expired code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed body or invalid name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "DeviceDto": {
+        "type": "object",
+        "description": "A paired device that is not revoked.",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "current"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "Whether this is the device that made the request."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_seen_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Updated at most once a minute."
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "ErrorBody": {
         "type": "object",
         "description": "The error body of every non-2xx response.",
@@ -97,6 +345,60 @@
         "enum": [
           "ok"
         ]
+      },
+      "PairingCodeDto": {
+        "type": "object",
+        "description": "A one-time pairing code, to show to the person pairing a new device.\nNot `Debug`: the code is a secret.",
+        "required": [
+          "code",
+          "expires_at"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "`XXXX-XXXX`, Crockford base32."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PairingRequest": {
+        "type": "object",
+        "description": "A pairing request from a new device. Not `Debug`: the code is a secret.",
+        "required": [
+          "code",
+          "name"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The one-time pairing code, as typed: case, spaces and hyphens do\nnot matter."
+          },
+          "name": {
+            "type": "string",
+            "description": "The new device's name: trimmed, 1 to 64 characters, no control\ncharacter."
+          }
+        }
+      },
+      "PairingResponse": {
+        "type": "object",
+        "description": "The new device and its bearer token, returned only here, only once.\nNot `Debug`: the token is a secret.",
+        "required": [
+          "device_id",
+          "token"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "token": {
+            "type": "string",
+            "description": "`um_` then 43 base64url characters. Send it as\n`Authorization: Bearer <token>`."
+          }
+        }
       }
     },
     "securitySchemes": {

@@ -54,3 +54,79 @@ pub async fn json(response: Response<Body>) -> serde_json::Value {
         .to_bytes();
     serde_json::from_slice(&bytes).unwrap()
 }
+
+/// Sends a request with the given headers and body.
+pub async fn send_with(
+    router: &Router,
+    method: &str,
+    uri: &str,
+    headers: &[(&str, &str)],
+    body: impl Into<Body>,
+) -> Response<Body> {
+    let mut builder = Request::builder().method(method).uri(uri);
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
+    }
+    router
+        .clone()
+        .oneshot(builder.body(body.into()).unwrap())
+        .await
+        .unwrap()
+}
+
+/// Sends a request authenticated with `token`.
+pub async fn send_auth(router: &Router, method: &str, uri: &str, token: &str) -> Response<Body> {
+    let bearer = format!("Bearer {token}");
+    send_with(
+        router,
+        method,
+        uri,
+        &[("authorization", &bearer)],
+        Body::empty(),
+    )
+    .await
+}
+
+/// `POST /api/v1/pairing` with a JSON body.
+pub async fn post_pairing(router: &Router, body: &serde_json::Value) -> Response<Body> {
+    send_with(
+        router,
+        "POST",
+        "/api/v1/pairing",
+        &[("content-type", "application/json")],
+        body.to_string(),
+    )
+    .await
+}
+
+/// A fresh pairing code, as created by the server's subcommand, in its
+/// display form (`XXXX-XXXX`).
+pub async fn new_code(h: &Harness) -> String {
+    h.state
+        .create_pairing_code
+        .execute(None)
+        .await
+        .unwrap()
+        .code
+        .to_string()
+}
+
+/// Pairs a device through the API; returns its id and token.
+pub async fn pair(h: &Harness, name: &str) -> (i64, String) {
+    let code = new_code(h).await;
+    let res = post_pairing(&h.router, &serde_json::json!({"code": code, "name": name})).await;
+    assert_eq!(res.status(), 201);
+    let body = json(res).await;
+    (
+        body["device_id"].as_i64().unwrap(),
+        body["token"].as_str().unwrap().to_owned(),
+    )
+}
+
+pub async fn text(response: Response<Body>) -> String {
+    let bytes = http_body_util::BodyExt::collect(response.into_body())
+        .await
+        .unwrap()
+        .to_bytes();
+    String::from_utf8(bytes.to_vec()).unwrap()
+}
