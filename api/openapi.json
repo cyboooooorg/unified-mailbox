@@ -522,7 +522,10 @@
             }
           }
         ],
-        "description": "One event of the stream, the JSON of a `data:` line, tagged by `type`."
+        "description": "One event of the stream, the JSON of a `data:` line, tagged by `type`.",
+        "discriminator": {
+          "propertyName": "type"
+        }
       },
       "HealthDto": {
         "type": "object",

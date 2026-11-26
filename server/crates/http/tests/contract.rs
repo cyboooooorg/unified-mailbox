@@ -87,6 +87,10 @@ fn contract_is_user_facing() {
 #[test]
 fn event_schema_is_a_tagged_one_of() {
     let doc = serde_json::to_value(openapi()).unwrap();
+    assert_eq!(
+        doc["components"]["schemas"]["EventDto"]["discriminator"],
+        serde_json::json!({"propertyName": "type"})
+    );
     let variants = doc["components"]["schemas"]["EventDto"]["oneOf"]
         .as_array()
         .expect("EventDto is a oneOf");

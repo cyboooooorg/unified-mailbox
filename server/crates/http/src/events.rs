@@ -12,7 +12,9 @@ use domain::{DeviceId, Event};
 use futures_util::{StreamExt, stream};
 use ports::BusMessage;
 use serde::Serialize;
-use utoipa::ToSchema;
+use utoipa::openapi::schema::{Discriminator, Schema};
+use utoipa::openapi::{OpenApi, RefOr};
+use utoipa::{Modify, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -35,6 +37,26 @@ pub enum EventDto {
     /// The subscriber missed events: reload what is shown. The stream ends
     /// right after it; reconnect.
     Resync,
+}
+
+/// Adds the `type` discriminator to the `EventDto` schema: utoipa derives
+/// a discriminator only for untagged enums of references, not for an
+/// internally tagged enum like this one.
+pub(crate) struct EventDiscriminator;
+
+impl Modify for EventDiscriminator {
+    fn modify(&self, openapi: &mut OpenApi) {
+        let schema = openapi
+            .components
+            .as_mut()
+            .and_then(|components| components.schemas.get_mut("EventDto"));
+        match schema {
+            Some(RefOr::T(Schema::OneOf(one_of))) => {
+                one_of.discriminator = Some(Discriminator::new("type"));
+            }
+            _ => panic!("EventDto is registered as a oneOf schema"),
+        }
+    }
 }
 
 /// What the stream does with one bus message.
@@ -139,4 +161,15 @@ async fn stream_events(
 
 pub fn routes() -> OpenApiRouter<AppState> {
     OpenApiRouter::new().routes(routes!(stream_events))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "EventDto is registered as a oneOf schema")]
+    fn discriminator_needs_the_event_schema() {
+        EventDiscriminator.modify(&mut OpenApi::default());
+    }
 }

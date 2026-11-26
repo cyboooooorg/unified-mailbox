@@ -20,6 +20,8 @@ use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityRequirement
 use utoipa::{Modify, OpenApi as _};
 use utoipa_axum::router::OpenApiRouter;
 
+use events::EventDiscriminator;
+
 pub use auth::CurrentDevice;
 pub use error::{ApiError, ErrorBody, ErrorCode, ErrorDetail};
 pub use extract::{ApiJson, ApiPath};
@@ -31,7 +33,7 @@ pub use state::AppState;
         title = "Unified Mailbox API",
         description = "API of the Unified Mailbox server. Every route but /health and /pairing requires a per-device bearer token."
     ),
-    modifiers(&Bearer),
+    modifiers(&Bearer, &EventDiscriminator),
     components(schemas(
         ErrorBody,
         ErrorDetail,
