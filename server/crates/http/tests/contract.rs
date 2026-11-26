@@ -69,6 +69,7 @@ fn contract_is_user_facing() {
         [
             r#"delete /api/v1/devices/{id} "revoke_device""#,
             r#"get /api/v1/devices "list_devices""#,
+            r#"get /api/v1/events "stream_events""#,
             r#"get /api/v1/health "get_health""#,
             r#"get /api/v1/jobs "list_jobs""#,
             r#"get /api/v1/jobs/{id} "get_job""#,
@@ -81,4 +82,30 @@ fn contract_is_user_facing() {
         .as_array()
         .unwrap();
     assert!(required.iter().any(|f| f == "last_seen_at"));
+}
+
+#[test]
+fn event_schema_is_a_tagged_one_of() {
+    let doc = serde_json::to_value(openapi()).unwrap();
+    let variants = doc["components"]["schemas"]["EventDto"]["oneOf"]
+        .as_array()
+        .expect("EventDto is a oneOf");
+    let mut types: Vec<&str> = variants
+        .iter()
+        .map(|v| {
+            assert!(
+                v["required"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|f| f == "type"),
+                "{v}"
+            );
+            v["properties"]["type"]["enum"][0].as_str().unwrap()
+        })
+        .collect();
+    types.sort();
+    assert_eq!(types, ["device_revoked", "job", "resync"]);
+    let events = &doc["paths"]["/api/v1/events"]["get"]["responses"]["200"]["content"];
+    assert!(events.get("text/event-stream").is_some(), "{events}");
 }

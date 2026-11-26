@@ -4,6 +4,7 @@
 mod auth;
 mod devices;
 mod error;
+mod events;
 mod extract;
 mod health;
 mod jobs;
@@ -31,7 +32,14 @@ pub use state::AppState;
         description = "API of the Unified Mailbox server. Every route but /health and /pairing requires a per-device bearer token."
     ),
     modifiers(&Bearer),
-    components(schemas(ErrorBody, ErrorDetail, ErrorCode, jobs::JobDto, jobs::JobStatusDto))
+    components(schemas(
+        ErrorBody,
+        ErrorDetail,
+        ErrorCode,
+        jobs::JobDto,
+        jobs::JobStatusDto,
+        events::EventDto
+    ))
 )]
 struct ApiDoc;
 
@@ -63,7 +71,8 @@ fn api() -> OpenApiRouter<AppState> {
         "/api/v1",
         health::routes()
             .merge(devices::routes())
-            .merge(jobs::routes()),
+            .merge(jobs::routes())
+            .merge(events::routes()),
     )
 }
 

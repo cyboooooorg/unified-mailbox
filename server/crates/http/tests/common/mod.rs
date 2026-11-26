@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use application::Deps;
 use application::testing::{FixedClock, InMemoryDevices, InMemoryJobs, SeqSecrets};
@@ -27,12 +28,21 @@ pub fn harness() -> Harness {
 
 /// A harness and its repository, to make the storage fail.
 pub fn harness_with() -> (Harness, Arc<InMemoryDevices>) {
+    harness_parts(64)
+}
+
+/// A harness whose event bus keeps only `capacity` events per subscriber.
+pub fn harness_with_bus_capacity(capacity: usize) -> Harness {
+    harness_parts(capacity).0
+}
+
+fn harness_parts(capacity: usize) -> (Harness, Arc<InMemoryDevices>) {
     let repo = Arc::new(InMemoryDevices::new());
     let clock = Arc::new(FixedClock::new(
         Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
     ));
     let jobs = Arc::new(InMemoryJobs::new());
-    let bus = Arc::new(MemoryBus::new(64));
+    let bus = Arc::new(MemoryBus::new(capacity));
     let (shutdown, shutdown_rx) = tokio::sync::watch::channel(false);
     let state = AppState::new(
         Deps {
@@ -151,4 +161,16 @@ pub async fn text(response: Response<Body>) -> String {
         .unwrap()
         .to_bytes();
     String::from_utf8(bytes.to_vec()).unwrap()
+}
+
+/// The next frame of a streaming body as text; `None` once the body has
+/// ended. Panics when no frame arrives `within` the delay, so a test
+/// waiting for the end cannot pass on a silent stream.
+pub async fn next_chunk(body: &mut Body, within: Duration) -> Option<String> {
+    let frame = tokio::time::timeout(within, http_body_util::BodyExt::frame(body))
+        .await
+        .unwrap_or_else(|_| panic!("no frame within {within:?}"))?
+        .expect("body error");
+    let data = frame.into_data().expect("a data frame");
+    Some(String::from_utf8(data.to_vec()).unwrap())
 }

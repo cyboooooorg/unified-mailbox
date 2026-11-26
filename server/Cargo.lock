@@ -732,6 +732,7 @@ dependencies = [
  "chrono",
  "domain",
  "events-memory",
+ "futures-util",
  "http-body-util",
  "ports",
  "serde",
