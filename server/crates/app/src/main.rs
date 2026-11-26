@@ -1,18 +1,33 @@
 //! Server binary: reads the configuration once, wires the adapters into
-//! the use cases and runs the background tasks.
+//! the use cases and serves the HTTP API.
 
+mod cli;
 mod config;
 mod env;
+mod system;
 
 use std::fs::DirBuilder;
 use std::path::Path;
 use std::process::ExitCode;
+use std::sync::Arc;
 
+use application::{CreatePairingCode, Deps};
+use chrono::SecondsFormat;
+use cli::Command;
 use config::Config;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    // Arguments first: a typo must not create the data directory.
+    let command = match cli::parse(std::env::args_os().skip(1)) {
+        Ok(command) => command,
+        Err(message) => {
+            eprintln!("{message}\n{}", cli::USAGE);
+            return ExitCode::from(2);
+        }
+    };
+
     let file = match env::read_dotenv(Path::new(".env")) {
         Ok(file) => file,
         Err(err) => {
@@ -38,10 +53,13 @@ async fn main() -> ExitCode {
         eprintln!("{err}");
         return ExitCode::FAILURE;
     }
-    if let Err(err) = sqlite::Store::open(config.store.clone()).await {
-        eprintln!("cannot open the store: {err}");
-        return ExitCode::FAILURE;
-    }
+    let store = match sqlite::Store::open(config.store.clone()).await {
+        Ok(store) => Arc::new(store),
+        Err(err) => {
+            eprintln!("cannot open the store: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         dry_run = config.dry_run,
@@ -50,7 +68,83 @@ async fn main() -> ExitCode {
         archive = ?config.spam.archive.iter().map(|key| key.as_str()).collect::<Vec<_>>(),
         "store ready"
     );
-    ExitCode::SUCCESS
+    let deps = Deps {
+        repo: store.clone(),
+        clock: Arc::new(system::SystemClock),
+        secrets: Arc::new(system::OsSecrets),
+    };
+
+    let code = match command {
+        Command::Serve => serve(&config, deps).await,
+        Command::PairCode => pair_code(deps).await,
+    };
+    store.close().await;
+    code
+}
+
+async fn serve(config: &Config, deps: Deps) -> ExitCode {
+    let listener = match tokio::net::TcpListener::bind(config.listen_addr).await {
+        Ok(listener) => listener,
+        Err(err) => {
+            eprintln!(
+                "LISTEN_ADDR: cannot listen on {}: {err}",
+                config.listen_addr
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+    tracing::info!(addr = %config.listen_addr, "listening");
+    let app = http_api::router(http_api::AppState::new(deps));
+    match axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+    {
+        Ok(()) => {
+            tracing::info!("stopped");
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("server error: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn pair_code(deps: Deps) -> ExitCode {
+    match CreatePairingCode::new(deps).execute(None).await {
+        Ok(created) => {
+            println!("Pairing code: {}", created.code);
+            println!(
+                "Valid until {} (10 minutes, single use).",
+                created
+                    .expires_at
+                    .to_rfc3339_opts(SecondsFormat::Secs, true)
+            );
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("cannot create the pairing code: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Resolves on SIGINT or SIGTERM.
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut term = signal(SignalKind::terminate()).expect("install the SIGTERM handler");
+        let mut int = signal(SignalKind::interrupt()).expect("install the SIGINT handler");
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = int.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
 }
 
 /// Creates `DATA_DIR` (mode `0700`) when missing and checks that the key

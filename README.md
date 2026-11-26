@@ -40,8 +40,10 @@ Run the server from `server/`:
 cargo run -p app
 ```
 
-For now it reads its configuration, opens the store and exits; the HTTP
-API comes next (#13).
+The server serves the API on `LISTEN_ADDR` until it receives SIGTERM or
+Ctrl-C, then stops cleanly. Every route is under `/api/v1`; the contract
+is `api/openapi.json`. See [Pairing a device](#pairing-a-device) to get
+a token.
 
 ### Configuration
 
@@ -73,10 +75,43 @@ from (`server/.env` with the command above) to start.
 | `SPAM_THRESHOLD` | `90` | Spam or phishing confidence, from 0 to 100, at or above which a mail goes to the junk folder. |
 | `PROTECT_KNOWN_SENDERS` | `true` | Never send to junk a mail from a sender the user knows and that passed DMARC. |
 | `ARCHIVE_CATEGORIES` | empty | Comma-separated tag keys (such as `newsletter,promotion`) whose mails are archived once classified. |
+| `LISTEN_ADDR` | `127.0.0.1:8000` | Socket address (`host:port`, IPv6 as `[::1]:8000`) the API listens on. Behind Tailscale, keep the loopback address and expose it with `tailscale serve`, or use the tailnet address. In Docker, use `0.0.0.0:8000` and publish the port on the tailnet interface only. |
 | `RUST_LOG` | `info` | Log filter, in [`tracing-subscriber` `EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) syntax, such as `info,sqlite=debug`. |
 
 Each later feature adds its variables to this table and to
 `.env.example`.
+
+### Pairing a device
+
+Every route but `GET /api/v1/health` and `POST /api/v1/pairing` needs an
+`Authorization: Bearer <token>` header. A token belongs to one device and
+is revocable on its own.
+
+For the first device, print a one-time code on the server (from
+`server/`, or `unified-mailbox pair-code` in the container):
+
+```bash
+cargo run -p app -- pair-code
+```
+
+It prints a code such as `04HM-ASW9`, valid for 10 minutes and usable
+once. Exchange it for a token, giving the device a name:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/pairing \
+  -H 'Content-Type: application/json' \
+  -d '{"code": "04HM-ASW9", "name": "My phone"}'
+```
+
+The response holds the token (`um_...`). It is shown once and stored only
+as a hash: keep it. Send it as `Authorization: Bearer <token>`.
+
+- A paired device creates the code of the next one with `POST
+  /api/v1/devices/pairing-codes`.
+- `GET /api/v1/devices` lists the devices, and `DELETE
+  /api/v1/devices/{id}` revokes one: its token stops working at once.
+- When every device is lost or revoked, run `pair-code` again on the
+  server.
 
 ### Data files
 
@@ -121,7 +156,8 @@ adapter brings a new I/O crate, add it to `IO_CRATES` in that test.
 
 The API contract is `api/openapi.json`, generated from the `http-api`
 crate. After any change to a route or a DTO, regenerate it in the same
-commit; a test fails when the committed file is stale:
+commit. `mise run openapi` regenerates it, and `mise run ci` fails while
+it is stale:
 
 ```bash
 mise run openapi
