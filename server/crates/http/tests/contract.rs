@@ -132,10 +132,43 @@ fn nullable_language_keeps_its_description_on_the_property() {
     );
     let branches = language["oneOf"].as_array().expect("language is a oneOf");
     assert!(branches.iter().any(|b| b["type"] == "null"), "{language}");
+}
+
+/// utoipa 5 puts the doc comment of an `Option` of a `$ref` on the `$ref`
+/// branch of its `oneOf`, where generated clients drop it (#81).
+#[test]
+fn no_one_of_branch_carries_a_description_beside_a_ref() {
+    fn walk(value: &serde_json::Value, path: &str, found: &mut Vec<String>) {
+        match value {
+            Value::Object(map) => {
+                for branch in map
+                    .get("oneOf")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
+                    if branch.get("$ref").is_some() && branch.get("description").is_some() {
+                        found.push(format!("{path}: {branch}"));
+                    }
+                }
+                for (key, child) in map {
+                    walk(child, &format!("{path}/{key}"), found);
+                }
+            }
+            Value::Array(items) => {
+                for (i, child) in items.iter().enumerate() {
+                    walk(child, &format!("{path}/{i}"), found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let doc = serde_json::to_value(openapi()).unwrap();
+    let mut found = Vec::new();
+    walk(&doc, "", &mut found);
     assert!(
-        branches.iter().all(|b| b
-            .get("description")
-            .is_none_or(|d| !d.as_str().unwrap().contains("`null`"))),
-        "the property's description is on a oneOf branch: {language}"
+        found.is_empty(),
+        "descriptions lost on a $ref branch; put `inline` on the field:\n{}",
+        found.join("\n")
     );
 }
