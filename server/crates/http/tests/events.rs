@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use application::testing::{InMemoryDevices, InMemorySettings, SeqSecrets};
-use application::{Deps, DeviceIsActive};
+use application::{Deps, DeviceIsActive, UnsavedJobEnds};
 
 use axum::body::Body;
 use chrono::{TimeZone, Utc};
@@ -144,6 +144,7 @@ fn router_checking_in(h: &Harness, devices: Arc<InMemoryDevices>) -> axum::Route
         jobs: h.jobs.clone(),
         events: h.bus.clone(),
         settings: Arc::new(InMemorySettings::new()),
+        job_ends: Arc::new(UnsavedJobEnds::new()),
     };
     http_api::router(AppState {
         device_is_active: Arc::new(DeviceIsActive::new(elsewhere)),

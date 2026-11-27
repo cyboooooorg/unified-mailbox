@@ -166,6 +166,12 @@ A job does not survive a restart. At startup, the jobs that were running
 become `interrupted` with their `finished_at` set. Finished jobs are
 kept for 30 days, then deleted.
 
+When the database refuses the end of a job (disk full, for example),
+the server keeps that end in memory: the API already reports it, and
+the server writes it again every 30 seconds and once more when it
+stops. Only if the process dies before that write succeeds is the job
+found `interrupted` at the next startup.
+
 ### Language
 
 The language setting drives the client interface and the text Claude

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::jobs::UnsavedJobEnds;
 use ports::{
     Clock, DeviceRepository, EventBus, JobRepository, SecretGenerator, SettingsRepository,
 };
@@ -13,4 +14,6 @@ pub struct Deps {
     pub jobs: Arc<dyn JobRepository>,
     pub events: Arc<dyn EventBus>,
     pub settings: Arc<dyn SettingsRepository>,
+    /// Job ends not written yet, shared by every use case of the process.
+    pub job_ends: Arc<UnsavedJobEnds>,
 }

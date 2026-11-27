@@ -153,9 +153,16 @@ Deliberate deviations:
   `set_total`. It saves and publishes at most every 0.3 s, measured with
   `Clock`; the end always saves and publishes the final counters. A
   failed save is logged and the work goes on: progress is a hint.
-- A failed final write (`finish`) is logged and the end is still
-  published, but the stored job stays `running` until the next startup
-  marks it `interrupted`. A known limit, accepted: no retry.
+- A failed final write (`finish`) is logged, the end is still
+  published, and the ended job is kept in memory in `UnsavedJobEnds`
+  (shared through `Deps`) until it is written (#75). `GetJob` returns
+  the kept end and `ListActiveJobs` leaves the job out, so the API
+  agrees with the published end at once. `FlushJobEnds` writes the kept
+  ends again and forgets each one that is saved; `app` runs it every
+  30 s and once more after the graceful shutdown. No retry limit: one
+  entry per ended job, and a lost outcome is never guessed. If the
+  process dies before the write succeeds, the outcome is lost and the
+  next startup marks the job `interrupted`, as for a job cut by a stop.
 - `GetJob`, `ListActiveJobs`.
 - `RecoverJobs`, run once at startup: running jobs become `interrupted`
   with `finished_at` set to now (logged with their count); jobs whose
@@ -246,6 +253,10 @@ stream's items.
   - `Ok` and `Err` always save and publish, even within 0.3 s of a
     step, with the final counters; `Err` carries its message;
   - a panicking work ends the job `failed`;
+  - a failed final write still publishes the end, `GetJob` returns the
+    ended job and `ListActiveJobs` leaves it out; `FlushJobEnds` keeps
+    it while the write still fails, then saves it and forgets it once
+    the write works;
   - `RevokeDevice` publishes `DeviceRevoked`;
   - `RecoverJobs` marks running jobs `interrupted` and deletes finished
     ones at 30 days, not at 29.
@@ -268,7 +279,9 @@ stream's items.
 - `app`: SIGINT with an open stream stops the server (next to the
   existing shutdown test); a job left running before a restart is
   `interrupted` after it; a server that fails to bind leaves a running
-  job `running`.
+  job `running`; with a paused clock, a refused job end is written
+  again after one 30 s period and not before; stopping aborts the
+  retry, writes the kept ends once more and counts those still refused.
 
 ## Documentation
 
