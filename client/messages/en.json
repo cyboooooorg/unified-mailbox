@@ -8,5 +8,36 @@
 	"error_payload_too_large": "The request is too large.",
 	"error_unsupported_media_type": "The request format is not supported.",
 	"error_invalid_request": "The request is invalid.",
-	"error_internal": "Something went wrong. Try again."
+	"error_internal": "Something went wrong. Try again.",
+	"app_title": "Unified Mailbox",
+	"status_loading": "Loading…",
+	"status_unreachable": "Server unreachable",
+	"status_stream_connecting": "Connecting…",
+	"status_stream_connected": "Connected",
+	"status_stream_reconnecting": "Reconnecting…",
+	"status_stream_stopped": "Disconnected",
+	"status_server_heading": "Server",
+	"status_server_line": "Status: {status}, version {version}",
+	"status_devices_heading": "Devices",
+	"status_device_current": "This device",
+	"status_jobs_heading": "Running jobs",
+	"status_jobs_none": "No running job.",
+	"status_job_progress": "{kind}: {done} of {total}",
+	"status_job_progress_open": "{kind}: {done}",
+	"status_job_failed": [
+		{
+			"declarations": ["input count", "input countText", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "({countText} failed)",
+				"countPlural=other": "({countText} failed)"
+			}
+		}
+	],
+	"pair_title": "Pair this device",
+	"pair_intro_before": "Print a code on the server with",
+	"pair_intro_after": ", then enter it here.",
+	"pair_code_label": "Pairing code",
+	"pair_name_label": "Device name",
+	"pair_submit": "Pair"
 }

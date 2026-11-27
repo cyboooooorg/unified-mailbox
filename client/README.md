@@ -123,6 +123,15 @@ Messages are compiled by [Paraglide](https://paraglidejs.com) (`@inlang/paraglid
   sets `<html lang>` and re-renders every message in place. Paraglide's
   `getLocale` is overridden to read that state, so a language change does not
   reload or remount the page (the status page keeps its event stream).
+- Formatting: never build a number, date or relative time by hand. Use
+  `src/lib/i18n/format.ts` (`formatNumber`, `formatDate`, `formatDateTime`,
+  `formatRelative`, all `Intl`-based) and pass `locale.current`, so the screen
+  re-renders when the language changes. A count shown in a sentence is
+  formatted first and passed next to the number: the plural message selects on
+  `count` (`local countPlural = count: plural`) and displays `countText`. Job
+  kinds go through `jobKindLabel` (`src/lib/i18n/job-kind.ts`): add a
+  `job_kind_<kind>` message and register it in `JOB_KIND_LABELS`; an unknown
+  kind is shown as is.
 - Language names are written in their own language and are not translated;
   `Unified Mailbox` is not translated either.
 

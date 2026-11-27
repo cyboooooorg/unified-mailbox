@@ -52,3 +52,17 @@ describe('message files', () => {
 		expect(parameters('Hello')).toEqual([]);
 	});
 });
+
+describe('plural messages', () => {
+	it('job_failed_selects_the_variant_from_the_count', async () => {
+		const { m } = await import('#lib/paraglide/messages.js');
+		const { locale } = await import('./locale.svelte');
+		locale.set('en');
+		expect(m.status_job_failed({ count: 1, countText: '1' })).toBe('(1 failed)');
+		expect(m.status_job_failed({ count: 1200, countText: '1,200' })).toBe('(1,200 failed)');
+		locale.set('fr');
+		expect(m.status_job_failed({ count: 1, countText: '1' })).toBe('(1 échec)');
+		expect(m.status_job_failed({ count: 3, countText: '3' })).toBe('(3 échecs)');
+		locale.set('en');
+	});
+});

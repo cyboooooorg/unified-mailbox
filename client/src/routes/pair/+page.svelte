@@ -3,6 +3,7 @@
 	import { api } from '../../lib/api/app';
 	import { describeError, genericError } from '../../lib/api/errors';
 	import { session } from '../../lib/auth/session.svelte';
+	import { m } from '#lib/paraglide/messages.js';
 	import { suggestDeviceName, validateDeviceName } from '../../lib/auth/device-name';
 
 	let code = $state('');
@@ -35,21 +36,21 @@
 </script>
 
 <main>
-	<h1>Pair this device</h1>
-	<p>Print a code on the server with <code>unified-mailbox pair-code</code>, then enter it here.</p>
+	<h1>{m.pair_title()}</h1>
+	<p>{m.pair_intro_before()} <code>unified-mailbox pair-code</code>{m.pair_intro_after()}</p>
 	<form onsubmit={pair}>
 		<label>
-			Pairing code
+			{m.pair_code_label()}
 			<input bind:value={code} autocomplete="off" autocapitalize="characters" required />
 		</label>
 		<label>
-			Device name
+			{m.pair_name_label()}
 			<input bind:value={name} maxlength="64" required />
 		</label>
 		{#if error}
 			<p role="alert">{error}</p>
 		{/if}
-		<button type="submit" disabled={busy}>Pair</button>
+		<button type="submit" disabled={busy}>{m.pair_submit()}</button>
 	</form>
 </main>
 

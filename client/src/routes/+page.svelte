@@ -3,6 +3,10 @@
 	import { session } from '../lib/auth/session.svelte';
 	import { connectEvents, type StreamState } from '../lib/events/stream';
 	import { createDeviceSync, createJobSync, type Loaded } from '../lib/status/sync';
+	import { formatNumber } from '../lib/i18n/format';
+	import { jobKindLabel } from '../lib/i18n/job-kind';
+	import { locale } from '../lib/i18n/locale.svelte';
+	import { m } from '#lib/paraglide/messages.js';
 	import type { components } from '../lib/api/schema';
 
 	type Health = components['schemas']['HealthDto'];
@@ -10,12 +14,11 @@
 	type Job = components['schemas']['JobDto'];
 	type EventDto = components['schemas']['EventDto'];
 
-	const UNREACHABLE = 'Server unreachable';
-	const STREAM_LABELS: Record<StreamState, string> = {
-		connecting: 'Connecting…',
-		connected: 'Connected',
-		reconnecting: 'Reconnecting…',
-		stopped: 'Disconnected'
+	const STREAM_LABELS: Record<StreamState, () => string> = {
+		connecting: m.status_stream_connecting,
+		connected: m.status_stream_connected,
+		reconnecting: m.status_stream_reconnecting,
+		stopped: m.status_stream_stopped
 	};
 
 	// Each part loads on its own: a failure shows in that part only.
@@ -72,59 +75,75 @@
 </script>
 
 <main>
-	<h1>Unified Mailbox</h1>
+	<h1>{m.app_title()}</h1>
 	<p class="stream" data-state={stream}>
-		{STREAM_LABELS[stream]}
+		{STREAM_LABELS[stream]()}
 	</p>
 
 	<section>
-		<h2>Server</h2>
+		<h2>{m.status_server_heading()}</h2>
 		{#if healthFailed}
-			<p>{UNREACHABLE}</p>
+			<p>{m.status_unreachable()}</p>
 		{:else if health}
-			<p>Status: {health.status}, version {health.version}</p>
+			<p>{m.status_server_line({ status: health.status, version: health.version })}</p>
 		{:else}
-			<p>Loading…</p>
+			<p>{m.status_loading()}</p>
 		{/if}
 	</section>
 
 	<section>
-		<h2>Devices</h2>
+		<h2>{m.status_devices_heading()}</h2>
 		{#if devices.failed}
-			<p>{UNREACHABLE}</p>
+			<p>{m.status_unreachable()}</p>
 		{:else if devices.data}
 			<ul>
 				{#each devices.data as device (device.id)}
 					<li>
 						{device.name}
-						{#if device.current}<strong>This device</strong>{/if}
+						{#if device.current}<strong>{m.status_device_current()}</strong>{/if}
 					</li>
 				{/each}
 			</ul>
 		{:else}
-			<p>Loading…</p>
+			<p>{m.status_loading()}</p>
 		{/if}
 	</section>
 
 	<section>
-		<h2>Running jobs</h2>
+		<h2>{m.status_jobs_heading()}</h2>
 		{#if jobs.failed}
-			<p>{UNREACHABLE}</p>
+			<p>{m.status_unreachable()}</p>
 		{:else if jobs.data}
 			{#if jobs.data.length === 0}
-				<p>No running job.</p>
+				<p>{m.status_jobs_none()}</p>
 			{:else}
 				<ul>
 					{#each jobs.data as job (job.id)}
 						<li>
-							{job.kind}: {job.done}{job.total === null ? '' : ` of ${job.total}`}
-							{#if job.failed > 0}({job.failed} failed){/if}
+							{#if job.total === null}
+								{m.status_job_progress_open({
+									kind: jobKindLabel(job.kind),
+									done: formatNumber(job.done, locale.current)
+								})}
+							{:else}
+								{m.status_job_progress({
+									kind: jobKindLabel(job.kind),
+									done: formatNumber(job.done, locale.current),
+									total: formatNumber(job.total, locale.current)
+								})}
+							{/if}
+							{#if job.failed > 0}
+								{m.status_job_failed({
+									count: job.failed,
+									countText: formatNumber(job.failed, locale.current)
+								})}
+							{/if}
 						</li>
 					{/each}
 				</ul>
 			{/if}
 		{:else}
-			<p>Loading…</p>
+			<p>{m.status_loading()}</p>
 		{/if}
 	</section>
 </main>
