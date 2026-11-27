@@ -81,11 +81,12 @@ them.
 
 ## Checks
 
-`mise run ci` runs what the pipeline runs (server format, clippy and
-tests, defined in `mise.toml`): run it before every pull request, from
-anywhere in the repository. The client adds `npm run check` and
-`npm test`, from `client/`, once it exists. Tools are pinned in
-`mise.toml`.
+`mise run ci` runs what the pipeline runs, defined in `mise.toml`: the
+server (format, clippy and tests, task `ci:server`) and the client
+(contract, `svelte-check`, lint, tests, build and CSP checks, task
+`ci:client`). Run `npm ci` in `client/` first, then `mise run ci` before
+every pull request, from anywhere in the repository. Tools, Node
+included, are pinned in `mise.toml`.
 
 ## Tests
 

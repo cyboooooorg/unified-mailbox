@@ -17,11 +17,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # Installs the Rust toolchain pinned in mise.toml.
+      # Installs the Rust toolchain and Node pinned in mise.toml.
       - uses: jdx/mise-action@v5
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('client/package-lock.json') }}
+          restore-keys: npm-
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: server
-      # Same task as locally: format, lint and test (see mise.toml).
+      # Same task as locally: server and client checks (see mise.toml).
       - name: Checks
         run: mise run ci

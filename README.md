@@ -173,10 +173,12 @@ Rust toolchain pinned in `mise.toml`, with `clippy` and `rustfmt`; the
 workspace declares the same version as its `rust-version`. Raise both
 together.
 
-Run the checks as the CI does on every pull request (format, clippy and
-tests, defined in `mise.toml`):
+Run the checks as the CI does on every pull request (server format,
+clippy and tests, then the client checks, defined in `mise.toml`). The
+client dependencies must be installed first:
 
 ```bash
+(cd client && npm ci)
 mise run ci
 ```
 
@@ -194,6 +196,26 @@ it is stale:
 ```bash
 mise run openapi
 ```
+
+### Client
+
+The client is a SvelteKit single-page app in TypeScript in `client/`.
+`mise install` installs the Node version pinned in `mise.toml`. Its API
+types are generated from `api/openapi.json` into
+`client/src/lib/api/schema.d.ts`; never edit that file by hand.
+
+```bash
+cd client
+npm ci                # install the dependencies
+npm run dev           # dev server; /api is proxied to the Rust server
+npm run generate      # regenerate the API types after `mise run openapi`
+```
+
+The dev server proxies `/api` to `http://127.0.0.1:8000`; set
+`API_PROXY_TARGET` to use another server. Start the server first. The
+CI fails while `schema.d.ts` is stale, and checks that the built
+`index.html` carries a hashed Content-Security-Policy without
+`'unsafe-inline'` (`npm run check:contract`, `npm run check:csp`).
 
 ## License
 
