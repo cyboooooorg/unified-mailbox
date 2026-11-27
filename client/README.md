@@ -109,9 +109,9 @@ Messages are compiled by [Paraglide](https://paraglidejs.com) (`@inlang/paraglid
 - `messages/en.json` (the base language and the fallback) and
   `messages/fr.json` hold the strings; `project.inlang/settings.json` lists
   the locales. `src/lib/paraglide/` is generated (by `npm run messages`, which
-  `prepare`, `check` and the Vite plugin run) and git-ignored. Compiling
-  fetches the message-format plugin pinned in `settings.json` from jsDelivr, so
-  it needs network access the first time.
+  `prepare`, `check` and the Vite plugin run) and git-ignored. The
+  message-format plugin is a pinned devDependency loaded from `node_modules`
+  (`modules` in `settings.json`), so compiling needs no network.
 - Key names: `<screen>_<thing>` (`pair_title`), `error_<code>` for the server
   error codes (`error_generic` for any other failure) and `job_kind_<kind>`
   for job kinds. A `{name}` parameter is passed as `m.key({ name })`; plurals
