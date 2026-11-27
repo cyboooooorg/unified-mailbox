@@ -63,9 +63,17 @@ rules are few and the map makes tests trivial.
    which may hold a secret. `dotenvy` expands `$NAME` outside single
    quotes (python-dotenv only `${NAME}`): the README says so.
 2. The process environment is laid over it: a real variable beats
-   `.env`, as in Mailbot (pydantic-settings).
+   `.env`, as in Mailbot (pydantic-settings). A process variable whose
+   name or value is not valid UTF-8 is skipped, unless its name is one
+   the server reads (`KNOWN_VARIABLES`, next to `from_vars`): then it is
+   an error, `<NAME>: value is not valid UTF-8`, never quoting the
+   value, and the `.env` value of that name is dropped rather than used
+   in its place (#72). **Deviation from Mailbot**, which decodes such a
+   value with surrogates and uses it as text.
 3. `Config::from_vars(&HashMap<String, String>)` parses the map and
-   returns `Config` or the list of all errors.
+   returns `Config` or the list of all errors. The encoding errors of
+   step 2 come first in that list, so every invalid variable is reported
+   at once.
 
 Only `main` touches the process environment; tests call `from_vars`.
 
