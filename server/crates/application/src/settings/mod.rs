@@ -94,14 +94,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_from_unset_publishes() {
-        let f = fixture();
-        f.set(Language::En).await;
-        assert_eq!(f.get().await, Some(Language::En));
-        assert_eq!(f.bus.events().len(), 1);
-    }
-
-    #[tokio::test]
     async fn effective_falls_back_to_default() {
         assert_eq!(fixture().effective().await, Language::En);
     }
@@ -114,9 +106,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_fails_without_publishing_when_the_read_fails() {
+    async fn set_overwrites_when_the_read_fails() {
         let f = fixture();
         f.settings.fail_reads();
+        SetLanguage::new(f.deps.clone())
+            .execute(Language::Fr)
+            .await
+            .unwrap();
+        assert_eq!(f.settings.set_count(), 1);
+        assert!(matches!(
+            f.bus.events().as_slice(),
+            [Event::SettingsChanged]
+        ));
+    }
+
+    #[tokio::test]
+    async fn set_fails_without_publishing_when_the_write_fails() {
+        let f = fixture();
+        f.settings.fail_writes();
         let result = SetLanguage::new(f.deps.clone()).execute(Language::Fr).await;
         assert!(result.is_err());
         assert!(f.bus.events().is_empty());

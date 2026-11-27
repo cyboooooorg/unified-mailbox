@@ -13,9 +13,11 @@ impl SetLanguage {
 
     /// Publishes [`Event::SettingsChanged`] when the stored value changes
     /// (unset counts as different from any language). Setting the stored
-    /// language again writes and publishes nothing.
+    /// language again writes and publishes nothing. A stored value that
+    /// cannot be read (for example an unknown code) is replaced; a failed
+    /// write returns the error and publishes nothing.
     pub async fn execute(&self, language: Language) -> Result<(), RepositoryError> {
-        if self.0.settings.language().await? == Some(language) {
+        if matches!(self.0.settings.language().await, Ok(Some(stored)) if stored == language) {
             return Ok(());
         }
         self.0

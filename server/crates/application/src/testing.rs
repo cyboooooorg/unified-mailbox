@@ -399,6 +399,7 @@ struct SettingsState {
     language: Option<Language>,
     sets: usize,
     fail_reads: bool,
+    fail_writes: bool,
 }
 
 /// A [`SettingsRepository`] in memory. Nothing is set at first.
@@ -415,7 +416,12 @@ impl InMemorySettings {
         self.0.lock().unwrap().fail_reads = true;
     }
 
-    /// How many times `set_language` was called.
+    /// Makes every write fail.
+    pub fn fail_writes(&self) {
+        self.0.lock().unwrap().fail_writes = true;
+    }
+
+    /// How many times `set_language` stored a value.
     pub fn set_count(&self) -> usize {
         self.0.lock().unwrap().sets
     }
@@ -437,6 +443,9 @@ impl SettingsRepository for InMemorySettings {
         _at: DateTime<Utc>,
     ) -> Result<(), RepositoryError> {
         let mut state = self.0.lock().unwrap();
+        if state.fail_writes {
+            return Err(RepositoryError("settings write failed".into()));
+        }
         state.language = Some(language);
         state.sets += 1;
         Ok(())
