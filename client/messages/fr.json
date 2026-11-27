@@ -1,0 +1,12 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"error_generic": "Une erreur est survenue. Réessayez.",
+	"error_invalid_pairing_code": "Ce code est invalide ou expiré.",
+	"error_unauthorized": "Cet appareil n'est pas connecté.",
+	"error_not_found": "Introuvable.",
+	"error_method_not_allowed": "Cette action n'est pas autorisée.",
+	"error_payload_too_large": "La requête est trop volumineuse.",
+	"error_unsupported_media_type": "Le format de la requête n'est pas pris en charge.",
+	"error_invalid_request": "La requête est invalide.",
+	"error_internal": "Une erreur est survenue. Réessayez."
+}

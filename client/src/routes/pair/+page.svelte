@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { api } from '../../lib/api/app';
-	import { describeError, GENERIC_ERROR } from '../../lib/api/errors';
+	import { describeError, genericError } from '../../lib/api/errors';
 	import { session } from '../../lib/auth/session.svelte';
 	import { suggestDeviceName, validateDeviceName } from '../../lib/auth/device-name';
 
@@ -27,7 +27,7 @@
 				error = describeError(body);
 			}
 		} catch {
-			error = GENERIC_ERROR;
+			error = genericError();
 		} finally {
 			busy = false;
 		}

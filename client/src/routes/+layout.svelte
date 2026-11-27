@@ -1,11 +1,18 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import favicon from '#lib/assets/favicon.svg';
+	import { locale } from '../lib/i18n/locale.svelte';
 	import { session } from '../lib/auth/session.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
+
+	// app.html carries lang="en" until the stored language is known.
+	onMount(() => {
+		document.documentElement.lang = locale.current;
+	});
 
 	const onPairPage = $derived(page.url.pathname === '/pair');
 

@@ -27,6 +27,7 @@ Run from `client/`:
 | `npm run dev`            | Dev server; `/api` is proxied to `http://127.0.0.1:8000` (`API_PROXY_TARGET` changes it). |
 | `npm run build`          | Builds the static app into `build/`, to serve with `CLIENT_DIR`.                          |
 | `npm run generate`       | Regenerates `src/lib/api/schema.d.ts` after `mise run openapi`.                           |
+| `npm run messages`       | Compiles `messages/*.json` into `src/lib/paraglide/` (also run by `prepare` and `check`). |
 | `npm run check`          | `svelte-check` (types).                                                                   |
 | `npm run check:contract` | Fails when `schema.d.ts` is stale.                                                        |
 | `npm run check:csp`      | Fails unless the built page has a hashed CSP without `'unsafe-inline'`.                   |
@@ -52,8 +53,8 @@ Run from `client/`:
 - `src/lib/api/app.ts` is the app-wide `api`; `src/lib/auth/session.svelte.ts`
   holds the session state. The token lives in `localStorage` under
   `unified-mailbox.token`.
-- `src/lib/api/errors.ts` maps each server error code to a short message;
-  adding a code to the contract fails `npm run check` until it has one.
+- `src/lib/api/errors.ts` maps each server error code to a translated short
+  message; adding a code to the contract fails `npm run check` until it has one.
 
 ## Event stream reader
 
@@ -98,3 +99,35 @@ Its `onConnect` reloads health, devices and jobs; `job` events add, update or
 drop a running job and `device_revoked` reloads the devices. A `resync` is
 already handled by the reader (it calls `onConnect`), so the page does not
 reload again on it.
+
+## Translations
+
+Messages are compiled by [Paraglide](https://paraglidejs.com) (`@inlang/paraglide-js`
+3.x) into typed functions, imported as `import { m } from
+'#lib/paraglide/messages.js'` and called in templates: `{m.error_not_found()}`.
+
+- `messages/en.json` (the base language and the fallback) and
+  `messages/fr.json` hold the strings; `project.inlang/settings.json` lists
+  the locales. `src/lib/paraglide/` is generated (by `npm run messages`, which
+  `prepare`, `check` and the Vite plugin run) and git-ignored. Compiling
+  fetches the message-format plugin pinned in `settings.json` from jsDelivr, so
+  it needs network access the first time.
+- Key names: `<screen>_<thing>` (`pair_title`), `error_<code>` for the server
+  error codes (`error_generic` for any other failure) and `job_kind_<kind>`
+  for job kinds. A `{name}` parameter is passed as `m.key({ name })`; plurals
+  and other variants use the message-format variant syntax. A test checks that
+  both files have the same keys and the same parameters.
+- `src/lib/i18n/locale.svelte.ts` holds the language: `locale.current` is a
+  `$state` read from Paraglide's own resolution (`localStorage`, then the
+  browser language, then English) and `locale.set(language)` stores the choice,
+  sets `<html lang>` and re-renders every message in place. Paraglide's
+  `getLocale` is overridden to read that state, so a language change does not
+  reload or remount the page (the status page keeps its event stream).
+- Language names are written in their own language and are not translated;
+  `Unified Mailbox` is not translated either.
+
+To add a message: add the key to `messages/en.json` and `messages/fr.json`
+(the same parameters in both), then call `m.<key>()`. To add a language: add
+`messages/<code>.json`, add the code to `locales` in
+`project.inlang/settings.json`, and add the variant to `Language` in the
+server (`LanguageDto` in the contract, then `npm run generate`).

@@ -1,0 +1,12 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"error_generic": "Something went wrong. Try again.",
+	"error_invalid_pairing_code": "This code is invalid or expired.",
+	"error_unauthorized": "This device is not signed in.",
+	"error_not_found": "Not found.",
+	"error_method_not_allowed": "This action is not allowed.",
+	"error_payload_too_large": "The request is too large.",
+	"error_unsupported_media_type": "The request format is not supported.",
+	"error_invalid_request": "The request is invalid.",
+	"error_internal": "Something went wrong. Try again."
+}
