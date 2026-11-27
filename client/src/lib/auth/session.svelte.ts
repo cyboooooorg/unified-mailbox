@@ -20,6 +20,8 @@ export function createSession(tokens: TokenStore, navigate: (path: string) => vo
 			signedIn = true;
 		},
 		signOut() {
+			// Safe to call twice: the stream reader and the 401 middleware may both call it.
+			if (!signedIn && tokens.get() === null) return;
 			tokens.clear();
 			signedIn = false;
 			navigate('/pair');

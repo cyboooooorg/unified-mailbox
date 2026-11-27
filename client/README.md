@@ -1,59 +1,45 @@
-# sv
+# Unified Mailbox web client
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+The web client of Unified Mailbox: a SvelteKit single-page app in TypeScript
+(no server rendering). It only talks to the server's HTTP API, through types
+generated from `api/openapi.json`, and the Rust server serves its build (see
+"Web client" in the repository README).
 
-## Creating a project
+It has two screens: `/pair` (pairing code and device name, the name suggested
+from the browser) and `/` (server health, paired devices with this one marked,
+running jobs, and the state of the event stream). An unpaired browser is sent
+to `/pair`, a paired one away from it. Styling is plain CSS in component
+`<style>` blocks, kept minimal until #77: the Content-Security-Policy has no
+`style-src`, so there is no `style=` attribute and no injected style.
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Prerequisites
 
-```sh
-# create a new project
-npx sv create my-app
-```
+Node, installed by `mise install` at the repository root (version pinned in
+`mise.toml`).
 
-To recreate this project with the same configuration:
+## Scripts
 
-```sh
-# recreate this project
-npx sv@1.7.1 create --template minimal --types ts --add prettier eslint vitest="usages:unit" --install npm client
-```
+Run from `client/`:
 
-## Adding features
+| Script                   | What it does                                                                              |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| `npm ci`                 | Installs the pinned dependencies.                                                         |
+| `npm run dev`            | Dev server; `/api` is proxied to `http://127.0.0.1:8000` (`API_PROXY_TARGET` changes it). |
+| `npm run build`          | Builds the static app into `build/`, to serve with `CLIENT_DIR`.                          |
+| `npm run generate`       | Regenerates `src/lib/api/schema.d.ts` after `mise run openapi`.                           |
+| `npm run check`          | `svelte-check` (types).                                                                   |
+| `npm run check:contract` | Fails when `schema.d.ts` is stale.                                                        |
+| `npm run check:csp`      | Fails unless the built page has a hashed CSP without `'unsafe-inline'`.                   |
+| `npm run lint`           | Prettier and ESLint.                                                                      |
+| `npm test`               | Vitest.                                                                                   |
 
-Add features to your project with `sv add`:
+## Layout
 
-```sh
-npx sv add
-```
-
-For example, to add Tailwind CSS:
-
-```sh
-npx sv add tailwindcss
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+- `src/routes/`: the screens (`+layout.svelte` holds the sign-in redirects,
+  `pair/` the pairing page, `+page.svelte` the status page).
+- `src/lib/api/`: the typed client, the error messages, the generated types.
+- `src/lib/auth/`: the token store, the session, the device name rules.
+- `src/lib/events/`: the event stream reader.
 
 ## API client and session
 
@@ -104,3 +90,9 @@ void connectEvents({
 	signal: controller.signal
 });
 ```
+
+The status page starts it in an `$effect` and aborts it when the page is left.
+Its `onConnect` reloads health, devices and jobs; `job` events add, update or
+drop a running job and `device_revoked` reloads the devices. A `resync` is
+already handled by the reader (it calls `onConnect`), so the page does not
+reload again on it.

@@ -47,7 +47,27 @@ a token.
 
 With `CLIENT_DIR` set, the same server also serves the web client: a file
 of the directory, `index.html` for an app page such as `/jobs/42`, a plain
-404 for a missing asset. An unknown `/api` path stays the JSON 404.
+404 for a missing asset. An unknown `/api` path stays the JSON 404. See
+[Web client](#web-client).
+
+### Web client
+
+Build the client once, point `CLIENT_DIR` at the result and start the
+server:
+
+```bash
+(cd client && npm ci && npm run build)
+cd server
+CLIENT_DIR=../client/build cargo run -p app
+```
+
+Open the server address (`http://127.0.0.1:8000` by default; over
+Tailscale, the address `tailscale serve` gives). An unpaired browser
+shows the pairing page: print a code with `cargo run -p app -- pair-code`,
+enter it and keep the suggested device name or change it. The status page
+then shows the server health, the paired devices (this one is marked) and
+the running jobs, and follows the event stream. Revoking the browser's
+device from another one sends it back to the pairing page.
 
 ### Configuration
 
@@ -80,7 +100,7 @@ from (`server/.env` with the command above) to start.
 | `PROTECT_KNOWN_SENDERS` | `true` | Never send to junk a mail from a sender the user knows and that passed DMARC. |
 | `ARCHIVE_CATEGORIES` | empty | Comma-separated tag keys (such as `newsletter,promotion`) whose mails are archived once classified. |
 | `LISTEN_ADDR` | `127.0.0.1:8000` | Socket address (`host:port`, IPv6 as `[::1]:8000`) the API listens on. Behind Tailscale, keep the loopback address and expose it with `tailscale serve`, or use the tailnet address. In Docker, use `0.0.0.0:8000` and publish the port on the tailnet interface only. |
-| `CLIENT_DIR` | empty | Directory of the built web client, served on every path outside `/api`. It must hold an `index.html`, or the server refuses to start. Unset: the API only. |
+| `CLIENT_DIR` | empty | Directory of the built web client, served on every path outside `/api`. It must hold an `index.html`, or the server refuses to start. Unset: the API only. See [Web client](#web-client). |
 | `RUST_LOG` | `info` | Log filter, in [`tracing-subscriber` `EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) syntax, such as `info,sqlite=debug`. Logs go to stderr. |
 
 Each later feature adds its variables to this table and to
