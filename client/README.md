@@ -54,3 +54,15 @@ npm run build
 You can preview the production build with `npm run preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+
+## API client and session
+
+- `src/lib/api/client.ts` builds the typed `openapi-fetch` client from the
+  generated `paths`. It sends the device token as a bearer header to the same
+  origin only, and on a 401 (except from `/api/v1/pairing`) clears the token
+  and signs out.
+- `src/lib/api/app.ts` is the app-wide `api`; `src/lib/auth/session.svelte.ts`
+  holds the session state. The token lives in `localStorage` under
+  `unified-mailbox.token`.
+- `src/lib/api/errors.ts` maps each server error code to a short message;
+  adding a code to the contract fails `npm run check` until it has one.

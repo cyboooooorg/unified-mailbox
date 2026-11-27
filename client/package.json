@@ -45,5 +45,8 @@
 		"openapi-typescript": {
 			"typescript": "$typescript"
 		}
+	},
+	"dependencies": {
+		"openapi-fetch": "^0.17.0"
 	}
 }
