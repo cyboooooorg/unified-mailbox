@@ -508,6 +508,21 @@
           },
           {
             "type": "object",
+            "description": "The settings changed: reload them.",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "settings_changed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "The subscriber missed events: reload what is shown. The stream ends\nright after it; reconnect.",
             "required": [
               "type"

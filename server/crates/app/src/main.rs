@@ -77,6 +77,7 @@ async fn main() -> ExitCode {
         secrets: Arc::new(system::OsSecrets),
         jobs: store.clone(),
         events: Arc::new(events_memory::MemoryBus::new(events_memory::CAPACITY)),
+        settings: store.clone(),
     };
 
     let code = match command {

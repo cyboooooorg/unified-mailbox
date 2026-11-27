@@ -67,7 +67,7 @@ injected, so the tests drive it with a fake `fetch` and fake timers.
   `eventsource-parser`, reset for each connection.
 - On every connect and reconnect, and on every `resync` event, it calls
   `onConnect`: the page reloads what it shows, since events only tell what
-  changed since. Every known event (`job`, `device_revoked`, `resync`) then
+  changed since. Every known event (`job`, `device_revoked`, `settings_changed`, `resync`) then
   goes to `onEvent`; invalid JSON and unknown types are logged without their
   payload and ignored, so a newer server does not break an older client.
 - After the end of the stream, a network error or any status other than 2xx

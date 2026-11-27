@@ -34,6 +34,8 @@ pub enum EventDto {
     Job { job: JobDto },
     /// A device was revoked: a hint to reload the device list.
     DeviceRevoked { device_id: i64 },
+    /// The settings changed: reload them.
+    SettingsChanged,
     /// The subscriber missed events: reload what is shown. The stream ends
     /// right after it; reconnect.
     Resync,
@@ -82,6 +84,7 @@ fn forward(message: BusMessage, caller: DeviceId) -> Next {
         BusMessage::Event(Event::DeviceRevoked(id)) => Next::Send(EventDto::DeviceRevoked {
             device_id: id.get(),
         }),
+        BusMessage::Event(Event::SettingsChanged) => Next::Send(EventDto::SettingsChanged),
         BusMessage::Lagged => Next::Last(EventDto::Resync),
     }
 }

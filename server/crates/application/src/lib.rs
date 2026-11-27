@@ -5,15 +5,18 @@
 //!   listing and revocation of devices.
 //! - [`jobs`]: long operations tracked with their progress, and the event
 //!   stream that carries them to the clients.
+//! - [`settings`]: the language setting, shared by all devices.
 //! - `testing` (tests, or the `testing` feature): in-memory doubles of the
 //!   ports, for tests only.
 
 mod deps;
 pub mod devices;
 pub mod jobs;
+pub mod settings;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
 pub use deps::Deps;
 pub use devices::*;
 pub use jobs::*;
+pub use settings::*;

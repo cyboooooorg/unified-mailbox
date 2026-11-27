@@ -27,7 +27,9 @@ mod tests {
     use domain::{DeviceId, DeviceNameError};
 
     use super::*;
-    use crate::testing::{FixedClock, InMemoryDevices, InMemoryJobs, RecordingBus, SeqSecrets};
+    use crate::testing::{
+        FixedClock, InMemoryDevices, InMemoryJobs, InMemorySettings, RecordingBus, SeqSecrets,
+    };
 
     struct Fixture {
         deps: Deps,
@@ -48,6 +50,7 @@ mod tests {
             secrets: Arc::new(SeqSecrets::new()),
             jobs: Arc::new(InMemoryJobs::new()),
             events: bus.clone(),
+            settings: Arc::new(InMemorySettings::new()),
         };
         Fixture {
             deps,

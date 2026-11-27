@@ -37,7 +37,9 @@ mod tests {
 
     use super::*;
     use crate::Deps;
-    use crate::testing::{FixedClock, InMemoryDevices, InMemoryJobs, RecordingBus, SeqSecrets};
+    use crate::testing::{
+        FixedClock, InMemoryDevices, InMemoryJobs, InMemorySettings, RecordingBus, SeqSecrets,
+    };
 
     struct Fixture {
         deps: Deps,
@@ -60,6 +62,7 @@ mod tests {
             secrets: Arc::new(SeqSecrets::new()),
             jobs: jobs.clone(),
             events: bus.clone(),
+            settings: Arc::new(InMemorySettings::new()),
         };
         Fixture {
             deps,

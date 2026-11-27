@@ -3,7 +3,7 @@ mod common;
 use std::sync::Arc;
 use std::time::Duration;
 
-use application::testing::{InMemoryDevices, SeqSecrets};
+use application::testing::{InMemoryDevices, InMemorySettings, SeqSecrets};
 use application::{Deps, DeviceIsActive};
 
 use axum::body::Body;
@@ -93,6 +93,16 @@ async fn published_job_arrives_as_json() {
 }
 
 #[tokio::test]
+async fn settings_changed_arrives_as_its_type() {
+    let h = harness();
+    let (_, token) = pair(&h, "Phone").await;
+    let mut body = open(&h.router, &token).await;
+    h.bus.publish(Event::SettingsChanged);
+    let chunk = next_chunk(&mut body, WITHIN).await.unwrap();
+    assert_eq!(data(&chunk), json!({"type": "settings_changed"}));
+}
+
+#[tokio::test]
 async fn failed_job_carries_its_error_and_end() {
     let h = harness();
     let (_, token) = pair(&h, "Phone").await;
@@ -133,6 +143,7 @@ fn router_checking_in(h: &Harness, devices: Arc<InMemoryDevices>) -> axum::Route
         secrets: Arc::new(SeqSecrets::new()),
         jobs: h.jobs.clone(),
         events: h.bus.clone(),
+        settings: Arc::new(InMemorySettings::new()),
     };
     http_api::router(AppState {
         device_is_active: Arc::new(DeviceIsActive::new(elsewhere)),

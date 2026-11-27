@@ -198,6 +198,9 @@ export interface components {
             type: "device_revoked";
         } | {
             /** @enum {string} */
+            type: "settings_changed";
+        } | {
+            /** @enum {string} */
             type: "resync";
         };
         HealthDto: {

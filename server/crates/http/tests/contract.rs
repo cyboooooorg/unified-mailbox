@@ -109,7 +109,10 @@ fn event_schema_is_a_tagged_one_of() {
         })
         .collect();
     types.sort();
-    assert_eq!(types, ["device_revoked", "job", "resync"]);
+    assert_eq!(
+        types,
+        ["device_revoked", "job", "resync", "settings_changed"]
+    );
     let events = &doc["paths"]["/api/v1/events"]["get"]["responses"]["200"]["content"];
     assert!(events.get("text/event-stream").is_some(), "{events}");
 }
