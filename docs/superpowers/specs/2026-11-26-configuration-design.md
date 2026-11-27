@@ -71,9 +71,9 @@ rules are few and the map makes tests trivial.
    in its place (#72). **Deviation from Mailbot**, which decodes such a
    value with surrogates and uses it as text.
 3. `Config::from_vars(&HashMap<String, String>)` parses the map and
-   returns `Config` or the list of all errors. The encoding errors of
-   step 2 come first in that list, so every invalid variable is reported
-   at once.
+   returns `Config` or the list of all errors. `env::load` runs steps 2
+   and 3 and puts the encoding errors of step 2 before those of
+   `from_vars`, so `main` reports every invalid variable at once.
 
 Only `main` touches the process environment; tests call `from_vars`.
 

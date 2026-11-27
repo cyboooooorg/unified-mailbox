@@ -276,6 +276,8 @@ mod tests {
 
     use super::*;
 
+    // The check is a `debug_assert!`: a release build has none.
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "NOT_LISTED is read but missing from KNOWN_VARIABLES")]
     fn reading_an_unlisted_variable_fails_in_tests() {

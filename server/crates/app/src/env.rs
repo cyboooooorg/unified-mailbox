@@ -156,6 +156,18 @@ mod tests {
         assert_eq!(errors.len(), 1);
         let message = errors[0].to_string();
         assert_eq!(message, "DATA_DIR: value is not valid UTF-8");
+        assert!(!message.contains("invented-0000"), "{message}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn every_known_variable_not_utf8_is_reported_in_order() {
+        let process = KNOWN_VARIABLES
+            .iter()
+            .map(|name| (OsString::from(name), not_utf8()));
+        let errors = load(Vec::new(), process).unwrap_err().0;
+        let variables: Vec<_> = errors.iter().map(|e| e.variable).collect();
+        assert_eq!(variables, KNOWN_VARIABLES.to_vec());
     }
 
     #[cfg(unix)]
