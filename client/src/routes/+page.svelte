@@ -2,6 +2,7 @@
 	import { api } from '../lib/api/app';
 	import { session } from '../lib/auth/session.svelte';
 	import { connectEvents, type StreamState } from '../lib/events/stream';
+	import { createDeviceSync, createJobSync, type Loaded } from '../lib/status/sync';
 	import type { components } from '../lib/api/schema';
 
 	type Health = components['schemas']['HealthDto'];
@@ -10,15 +11,29 @@
 	type EventDto = components['schemas']['EventDto'];
 
 	const UNREACHABLE = 'Server unreachable';
+	const STREAM_LABELS: Record<StreamState, string> = {
+		connecting: 'Connecting…',
+		connected: 'Connected',
+		reconnecting: 'Reconnecting…',
+		stopped: 'Disconnected'
+	};
 
 	// Each part loads on its own: a failure shows in that part only.
 	let health = $state<Health | null>(null);
 	let healthFailed = $state(false);
-	let devices = $state<Device[] | null>(null);
-	let devicesFailed = $state(false);
-	let jobs = $state<Job[] | null>(null);
-	let jobsFailed = $state(false);
+	let devices = $state<Loaded<Device[]>>({ data: null, failed: false });
+	let jobs = $state<Loaded<Job[]>>({ data: null, failed: false });
 	let stream = $state<StreamState>('connecting');
+
+	// Loads and events race (separate connections): the sync modules reconcile them.
+	const deviceSync = createDeviceSync(
+		async () => (await api.GET('/api/v1/devices')).data ?? null,
+		(state) => (devices = state)
+	);
+	const jobSync = createJobSync(
+		async () => (await api.GET('/api/v1/jobs')).data ?? null,
+		(state) => (jobs = state)
+	);
 
 	async function loadHealth() {
 		try {
@@ -30,46 +45,15 @@
 		}
 	}
 
-	async function loadDevices() {
-		try {
-			const { data } = await api.GET('/api/v1/devices');
-			if (data) devices = data;
-			devicesFailed = !data;
-		} catch {
-			devicesFailed = true;
-		}
-	}
-
-	async function loadJobs() {
-		try {
-			const { data } = await api.GET('/api/v1/jobs');
-			if (data) jobs = data;
-			jobsFailed = !data;
-		} catch {
-			jobsFailed = true;
-		}
-	}
-
 	function reload() {
 		void loadHealth();
-		void loadDevices();
-		void loadJobs();
+		void deviceSync.load();
+		void jobSync.load();
 	}
 
 	function onEvent(event: EventDto) {
-		if (event.type === 'job') {
-			const job = event.job;
-			const others = (jobs ?? []).filter((known) => known.id !== job.id);
-			// The event is a hint: the next reload is the truth.
-			if (job.status === 'running') {
-				const at = (jobs ?? []).findIndex((known) => known.id === job.id);
-				jobs = at < 0 ? [...others, job] : (jobs ?? []).map((k) => (k.id === job.id ? job : k));
-			} else {
-				jobs = others;
-			}
-		} else if (event.type === 'device_revoked') {
-			void loadDevices();
-		}
+		if (event.type === 'job') jobSync.apply(event.job);
+		else if (event.type === 'device_revoked') deviceSync.deviceRevoked();
 		// `resync` already reloaded: the reader called `onConnect`.
 	}
 
@@ -90,7 +74,7 @@
 <main>
 	<h1>Unified Mailbox</h1>
 	<p class="stream" data-state={stream}>
-		{stream === 'connected' ? 'Connected' : 'Reconnecting…'}
+		{STREAM_LABELS[stream]}
 	</p>
 
 	<section>
@@ -106,11 +90,11 @@
 
 	<section>
 		<h2>Devices</h2>
-		{#if devicesFailed}
+		{#if devices.failed}
 			<p>{UNREACHABLE}</p>
-		{:else if devices}
+		{:else if devices.data}
 			<ul>
-				{#each devices as device (device.id)}
+				{#each devices.data as device (device.id)}
 					<li>
 						{device.name}
 						{#if device.current}<strong>This device</strong>{/if}
@@ -124,14 +108,14 @@
 
 	<section>
 		<h2>Running jobs</h2>
-		{#if jobsFailed}
+		{#if jobs.failed}
 			<p>{UNREACHABLE}</p>
-		{:else if jobs}
-			{#if jobs.length === 0}
+		{:else if jobs.data}
+			{#if jobs.data.length === 0}
 				<p>No running job.</p>
 			{:else}
 				<ul>
-					{#each jobs as job (job.id)}
+					{#each jobs.data as job (job.id)}
 						<li>
 							{job.kind}: {job.done}{job.total === null ? '' : ` of ${job.total}`}
 							{#if job.failed > 0}({job.failed} failed){/if}

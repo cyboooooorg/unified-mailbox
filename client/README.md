@@ -40,6 +40,8 @@ Run from `client/`:
 - `src/lib/api/`: the typed client, the error messages, the generated types.
 - `src/lib/auth/`: the token store, the session, the device name rules.
 - `src/lib/events/`: the event stream reader.
+- `src/lib/status/`: keeps the job and device lists right while a load and the
+  event stream race (drops older responses, replays the events a load missed).
 
 ## API client and session
 
