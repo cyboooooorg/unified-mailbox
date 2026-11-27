@@ -39,5 +39,6 @@
 	"pair_intro_after": ", puis saisissez-le ici.",
 	"pair_code_label": "Code d'association",
 	"pair_name_label": "Nom de l'appareil",
-	"pair_submit": "Associer"
+	"pair_submit": "Associer",
+	"language_label": "Langue"
 }

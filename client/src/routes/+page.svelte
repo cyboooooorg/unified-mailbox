@@ -5,6 +5,8 @@
 	import { createDeviceSync, createJobSync, type Loaded } from '../lib/status/sync';
 	import { formatNumber } from '../lib/i18n/format';
 	import { jobKindLabel } from '../lib/i18n/job-kind';
+	import { languageSync } from '../lib/i18n/app';
+	import LanguagePicker from '../lib/i18n/LanguagePicker.svelte';
 	import { locale } from '../lib/i18n/locale.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { components } from '../lib/api/schema';
@@ -52,11 +54,13 @@
 		void loadHealth();
 		void deviceSync.load();
 		void jobSync.load();
+		void languageSync.sync();
 	}
 
 	function onEvent(event: EventDto) {
 		if (event.type === 'job') jobSync.apply(event.job);
 		else if (event.type === 'device_revoked') deviceSync.deviceRevoked();
+		else if (event.type === 'settings_changed') void languageSync.sync();
 		// `resync` already reloaded: the reader called `onConnect`.
 	}
 
@@ -79,6 +83,7 @@
 	<p class="stream" data-state={stream}>
 		{STREAM_LABELS[stream]()}
 	</p>
+	<LanguagePicker />
 
 	<section>
 		<h2>{m.status_server_heading()}</h2>

@@ -39,5 +39,6 @@
 	"pair_intro_after": ", then enter it here.",
 	"pair_code_label": "Pairing code",
 	"pair_name_label": "Device name",
-	"pair_submit": "Pair"
+	"pair_submit": "Pair",
+	"language_label": "Language"
 }

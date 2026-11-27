@@ -132,6 +132,14 @@ Messages are compiled by [Paraglide](https://paraglidejs.com) (`@inlang/paraglid
   kinds go through `jobKindLabel` (`src/lib/i18n/job-kind.ts`): add a
   `job_kind_<kind>` message and register it in `JOB_KIND_LABELS`; an unknown
   kind is shown as is.
+- Language sync (`src/lib/i18n/sync.ts`, wired in `app.ts`): the server holds
+  the language (`/api/v1/settings/language`) and is the truth; `localStorage`
+  is only a cache that makes the first paint right, and it is kept on
+  sign-out. The first device to connect, when the server has no language yet,
+  stores its browser language. The status page syncs on every stream connect
+  (reconnects and `resync` included) and on `settings_changed`; a failed
+  request keeps the cached language. `LanguagePicker.svelte` stores the
+  choice on the server first and applies it only when that succeeded.
 - Language names are written in their own language and are not translated;
   `Unified Mailbox` is not translated either.
 
