@@ -151,8 +151,8 @@ The OpenAPI document is unchanged: static serving is outside it.
 ```text
 client/
   package.json            # scripts below; versions pinned by the lockfile
-  svelte.config.js        # adapter-static, fallback index.html
-  vite.config.ts          # dev proxy /api -> $API_PROXY_TARGET,
+  vite.config.ts          # SvelteKit 3: adapter-static (fallback
+                          # index.html), CSP; dev proxy /api -> $API_PROXY_TARGET,
                           # default http://127.0.0.1:8000
   src/
     lib/
@@ -302,6 +302,19 @@ Client (Vitest, no network):
 - `client/README.md`: purpose, scripts, layout, how the stream reader
   follows the protocol.
 - CLAUDE.md: the client checks are now part of `mise run ci`.
+
+## Found while building
+
+- The registry's current SvelteKit is 3: its configuration (adapter,
+  CSP) moved from `svelte.config.js` into the `sveltekit()` plugin in
+  `vite.config.ts`. The library modules are imported with relative
+  paths: the template's `#lib/*` alias does not type-check for `.ts`
+  modules.
+- SvelteKit's own live-region element (`#svelte-announcer`) carries a
+  `style` attribute, which the CSP blocks: the browser logs one CSP error
+  and the client hides the element with the same rules in its global
+  CSS. Allowing it would take `style-src-attr 'unsafe-inline'`; left as
+  is, since style attributes are not script.
 
 ## Left to the builder
 
