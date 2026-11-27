@@ -45,6 +45,10 @@ Ctrl-C, then stops cleanly. Every route is under `/api/v1`; the contract
 is `api/openapi.json`. See [Pairing a device](#pairing-a-device) to get
 a token.
 
+With `CLIENT_DIR` set, the same server also serves the web client: a file
+of the directory, `index.html` for an app page such as `/jobs/42`, a plain
+404 for a missing asset. An unknown `/api` path stays the JSON 404.
+
 ### Configuration
 
 The server reads its configuration once, at startup, from environment

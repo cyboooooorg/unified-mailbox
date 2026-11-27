@@ -34,10 +34,6 @@ pub struct Config {
     /// Where the HTTP API listens.
     pub listen_addr: SocketAddr,
     /// The built web client, served outside `/api`; `None` serves the API only.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "served by the next change; remove this then")
-    )]
     pub client_dir: Option<PathBuf>,
 }
 
