@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::classification::{Category, Classification, SpamConfidence};
+use crate::classification::{Classification, SpamConfidence};
 use crate::mail::Location;
 use crate::moves::Move;
 use crate::tag::TagKey;
@@ -65,9 +65,10 @@ pub fn muted_thread_move(location: &Location, locked: bool, thread_muted: bool) 
 ///    DMARC.
 /// 6. A category the policy archives is archived.
 ///
-/// A mail the classifier refused has no classification: the caller does
-/// not move it. Muted threads are handled before classification, by
-/// [`muted_thread_move`].
+/// A mail the classifier refused has no `Classification` (its stored
+/// category is [`Category::Unknown`](crate::classification::Category::Unknown)):
+/// the caller does not move it. Muted threads are handled before
+/// classification, by [`muted_thread_move`].
 pub fn decide(input: &DecisionInput<'_>, policy: &SpamPolicy) -> Option<Move> {
     let classification = input.classification;
     if input.locked {
@@ -79,22 +80,21 @@ pub fn decide(input: &DecisionInput<'_>, policy: &SpamPolicy) -> Option<Move> {
     if *input.location != Location::Inbox || (input.trusted && input.dmarc_passed) {
         return None;
     }
-    let suspicious = classification.category.is_tag(SPAM_KEY) || classification.is_phishing;
+    let suspicious = classification.category.as_str() == SPAM_KEY || classification.is_phishing;
     if suspicious && classification.spam_confidence >= policy.threshold {
         let spared = policy.protect_known_senders && input.known_sender && input.dmarc_passed;
         return (!spared).then_some(Move::Junk);
     }
-    let archived = match &classification.category {
-        Category::Tag(key) => policy.archive.contains(key),
-        Category::Unknown => false,
-    };
-    archived.then_some(Move::Archive)
+    policy
+        .archive
+        .contains(&classification.category)
+        .then_some(Move::Archive)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::classification::{Category, Classification, Priority, SpamConfidence};
+    use crate::classification::{Classification, Priority, SpamConfidence};
     use crate::mail::Location;
     use crate::tag::TagKey;
 
@@ -117,7 +117,7 @@ mod tests {
     fn fixture() -> Fixture {
         Fixture {
             classification: Classification {
-                category: Category::Tag(key("work")),
+                category: key("work"),
                 priority: Priority::Normal,
                 needs_reply: false,
                 is_phishing: false,
@@ -140,7 +140,7 @@ mod tests {
 
     impl Fixture {
         fn spam(mut self, confidence: i64) -> Self {
-            self.classification.category = Category::Tag(key("spam"));
+            self.classification.category = key("spam");
             self.classification.spam_confidence = SpamConfidence::clamped(confidence);
             self
         }
@@ -229,7 +229,7 @@ mod tests {
 
             let mut newsletter = fixture();
             newsletter.policy.archive.insert(key("newsletter"));
-            newsletter.classification.category = Category::Tag(key("newsletter"));
+            newsletter.classification.category = key("newsletter");
             newsletter.location = location.clone();
             assert_eq!(
                 newsletter.decide(),
@@ -296,14 +296,7 @@ mod tests {
     fn archive_category_is_archived() {
         let mut f = fixture();
         f.policy.archive.insert(key("newsletter"));
-        f.classification.category = Category::Tag(key("newsletter"));
+        f.classification.category = key("newsletter");
         assert_eq!(f.decide(), Some(Move::Archive));
-    }
-
-    #[test]
-    fn unknown_category_is_not_moved() {
-        let mut f = fixture();
-        f.classification.category = Category::Unknown;
-        assert_eq!(f.decide(), None);
     }
 }

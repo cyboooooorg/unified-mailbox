@@ -77,9 +77,11 @@ Modules of the `domain` crate:
   - Default tags: keys `important`, `personal`, `work`, `transaction`,
     `notification`, `newsletter`, `promotion`, `spam`. Their display name
     is translated by the client until the user renames them.
-- `classification`: `Category` (`Tag(TagKey)` or `Unknown`), `Priority`
-  (`High`, `Normal`, `Low`), `SpamConfidence` (0 to 100, `clamped` from
-  any integer), `Classification { category, priority, needs_reply,
+- `classification`: `Category` (`Tag(TagKey)` or `Unknown`, the
+  category stored for a mail; `Unknown` means the classifier refused it,
+  see `2026-11-27-category-unknown-design.md`), `Priority` (`High`,
+  `Normal`, `Low`), `SpamConfidence` (0 to 100, `clamped` from any
+  integer), `Classification { category: TagKey, priority, needs_reply,
   is_phishing, spam_confidence, summary, reason }`. Token usage and model
   stay out of the domain (classifier port concern).
 - `moves`: `Move` (`Inbox`, `Archive`, `Junk`, `Trash`,
@@ -101,7 +103,8 @@ Modules of the `domain` crate:
      known with DMARC passed.
   6. Category in the archive set: `Archive`.
   7. Otherwise no move.
-  A refusal (no classification) is handled by the caller: no move.
+  A refusal has no `Classification` (stored as `Category::Unknown`): the
+  caller does not move the mail.
 - Muted threads: `muted_thread_move(location, locked, thread_muted)`
   archives a new inbox mail of a muted thread unless it is locked. It runs
   before classification, so it needs no Claude call and applies to mails

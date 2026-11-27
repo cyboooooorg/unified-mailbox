@@ -5,7 +5,9 @@
 
 use crate::tag::TagKey;
 
-/// The tag Claude chose, or `Unknown` when it refused to classify.
+/// The category stored for a mail: the tag of its classification, or
+/// `Unknown` when the classifier refused to classify it. A
+/// [`Classification`] always names a tag.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Category {
     Tag(TagKey),
@@ -70,7 +72,7 @@ impl SpamConfidence {
 /// Claude's verdict on one mail.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Classification {
-    pub category: Category,
+    pub category: TagKey,
     pub priority: Priority,
     pub needs_reply: bool,
     pub is_phishing: bool,
