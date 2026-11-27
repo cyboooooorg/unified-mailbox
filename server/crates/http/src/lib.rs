@@ -9,6 +9,7 @@ mod events;
 mod extract;
 mod health;
 mod jobs;
+mod settings;
 mod state;
 
 use axum::Router;
@@ -42,7 +43,10 @@ pub use state::AppState;
         ErrorCode,
         jobs::JobDto,
         jobs::JobStatusDto,
-        events::EventDto
+        events::EventDto,
+        settings::LanguageDto,
+        settings::LanguageSettingDto,
+        settings::LanguageUpdateDto
     ))
 )]
 struct ApiDoc;
@@ -76,6 +80,7 @@ fn api() -> OpenApiRouter<AppState> {
         health::routes()
             .merge(devices::routes())
             .merge(jobs::routes())
+            .merge(settings::routes())
             .merge(events::routes()),
     )
 }

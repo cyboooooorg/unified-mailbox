@@ -166,6 +166,20 @@ A job does not survive a restart. At startup, the jobs that were running
 become `interrupted` with their `finished_at` set. Finished jobs are
 kept for 30 days, then deleted.
 
+### Language
+
+The language setting drives the client interface and the text Claude
+writes for the user (summaries and reasons). It is shared by every
+device. Two routes, under `/api/v1`, both need the bearer token:
+
+- `GET /settings/language` returns `{"language": "fr"}`. `language` is
+  `null` until a language is chosen: the client then follows its own
+  locale.
+- `PUT /settings/language` with `{"language": "en"}` or
+  `{"language": "fr"}` stores the choice and returns it. Any other value
+  is a `422` `invalid_request`. Every connected client receives a
+  `settings_changed` event and reloads the setting.
+
 ### Data files
 
 The server keeps its state in one SQLite database (with its `-wal` and

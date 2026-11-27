@@ -73,8 +73,10 @@ fn contract_is_user_facing() {
             r#"get /api/v1/health "get_health""#,
             r#"get /api/v1/jobs "list_jobs""#,
             r#"get /api/v1/jobs/{id} "get_job""#,
+            r#"get /api/v1/settings/language "get_language""#,
             r#"post /api/v1/devices/pairing-codes "create_pairing_code""#,
             r#"post /api/v1/pairing "pair_device""#,
+            r#"put /api/v1/settings/language "set_language""#,
         ]
     );
     assert!(!doc.to_string().contains("Debug"));

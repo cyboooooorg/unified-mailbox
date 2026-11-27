@@ -152,6 +152,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/language": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Returns the language the user chose, `null` when they have not. */
+        get: operations["get_language"];
+        /** Chooses the language; every client is told through the event stream. */
+        put: operations["set_language"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -246,6 +264,19 @@ export interface components {
          * @enum {string}
          */
         JobStatusDto: "running" | "succeeded" | "failed" | "interrupted";
+        /**
+         * @description A language the interface and Claude's text can be in.
+         * @enum {string}
+         */
+        LanguageDto: "en" | "fr";
+        /** @description The language the user chose. */
+        LanguageSettingDto: {
+            language: null | components["schemas"]["LanguageDto"];
+        };
+        /** @description The language to choose. */
+        LanguageUpdateDto: {
+            language: components["schemas"]["LanguageDto"];
+        };
         /** @description A one-time pairing code, to show to the person pairing a new device. */
         PairingCodeDto: {
             /** @description `XXXX-XXXX`, Crockford base32. */
@@ -605,6 +636,113 @@ export interface operations {
                 };
             };
             /** @description Malformed body or invalid name */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_language: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chosen language */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LanguageSettingDto"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_language: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanguageUpdateDto"];
+            };
+        };
+        responses: {
+            /** @description The language now chosen */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LanguageSettingDto"];
+                };
+            };
+            /** @description Missing or invalid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Body too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Body is not JSON */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Malformed body or unknown language */
             422: {
                 headers: {
                     [name: string]: unknown;
