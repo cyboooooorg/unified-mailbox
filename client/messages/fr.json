@@ -1,0 +1,45 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"error_generic": "Une erreur est survenue. Réessayez.",
+	"error_invalid_pairing_code": "Ce code est invalide ou expiré.",
+	"error_unauthorized": "Cet appareil n'est pas connecté.",
+	"error_not_found": "Introuvable.",
+	"error_method_not_allowed": "Cette action n'est pas autorisée.",
+	"error_payload_too_large": "La requête est trop volumineuse.",
+	"error_unsupported_media_type": "Le format de la requête n'est pas pris en charge.",
+	"error_invalid_request": "La requête est invalide.",
+	"error_internal": "Une erreur est survenue. Réessayez.",
+	"app_title": "Unified Mailbox",
+	"status_loading": "Chargement…",
+	"status_unreachable": "Serveur injoignable",
+	"status_stream_connecting": "Connexion…",
+	"status_stream_connected": "Connecté",
+	"status_stream_reconnecting": "Reconnexion…",
+	"status_stream_stopped": "Déconnecté",
+	"status_server_heading": "Serveur",
+	"status_health_ok": "En service",
+	"status_server_line": "État : {status}, version {version}",
+	"status_devices_heading": "Appareils",
+	"status_device_current": "Cet appareil",
+	"status_jobs_heading": "Tâches en cours",
+	"status_jobs_none": "Aucune tâche en cours.",
+	"status_job_progress": "{kind} : {done} sur {total}",
+	"status_job_progress_open": "{kind} : {done}",
+	"status_job_failed": [
+		{
+			"declarations": ["input count", "input countText", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "({countText} échec)",
+				"countPlural=other": "({countText} échecs)"
+			}
+		}
+	],
+	"pair_title": "Associer cet appareil",
+	"pair_intro_before": "Affichez un code sur le serveur avec",
+	"pair_intro_after": ", puis saisissez-le ici.",
+	"pair_code_label": "Code d'association",
+	"pair_name_label": "Nom de l'appareil",
+	"pair_submit": "Associer",
+	"language_label": "Langue"
+}

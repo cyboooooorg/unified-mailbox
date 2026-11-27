@@ -14,6 +14,7 @@
 //! - [`moves`]: the moves the code may apply. [`Move`] has no `Delete`
 //!   by design: nothing deletes a mail permanently.
 //! - [`decision`]: [`decide`], the rule from a classification to a move.
+//! - [`settings`]: [`Language`], the user's language.
 //!
 //! Types are validated when built, so an invalid value cannot travel
 //! further. Values are stable English codes and errors are codes with
@@ -28,6 +29,7 @@ pub mod event;
 pub mod job;
 pub mod mail;
 pub mod moves;
+pub mod settings;
 pub mod tag;
 
 pub use account::*;
@@ -38,4 +40,5 @@ pub use event::*;
 pub use job::*;
 pub use mail::*;
 pub use moves::*;
+pub use settings::*;
 pub use tag::*;

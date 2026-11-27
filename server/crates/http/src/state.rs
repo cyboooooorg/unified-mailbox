@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use application::{
-    AuthenticateDevice, CreatePairingCode, Deps, DeviceIsActive, GetJob, ListActiveJobs,
-    ListDevices, PairDevice, RevokeDevice, SubscribeEvents,
+    AuthenticateDevice, CreatePairingCode, Deps, DeviceIsActive, GetJob, GetLanguage,
+    ListActiveJobs, ListDevices, PairDevice, RevokeDevice, SetLanguage, SubscribeEvents,
 };
 
 /// The use cases the routes call, built once in `app`.
@@ -18,6 +18,8 @@ pub struct AppState {
     pub get_job: Arc<GetJob>,
     pub list_active_jobs: Arc<ListActiveJobs>,
     pub subscribe_events: Arc<SubscribeEvents>,
+    pub get_language: Arc<GetLanguage>,
+    pub set_language: Arc<SetLanguage>,
     /// Turns `true` when the server starts shutting down.
     pub shutdown: tokio::sync::watch::Receiver<bool>,
     /// How often an idle event stream sends a ping.
@@ -35,7 +37,9 @@ impl AppState {
             device_is_active: Arc::new(DeviceIsActive::new(deps.clone())),
             get_job: Arc::new(GetJob::new(deps.clone())),
             list_active_jobs: Arc::new(ListActiveJobs::new(deps.clone())),
-            subscribe_events: Arc::new(SubscribeEvents::new(deps)),
+            subscribe_events: Arc::new(SubscribeEvents::new(deps.clone())),
+            get_language: Arc::new(GetLanguage::new(deps.clone())),
+            set_language: Arc::new(SetLanguage::new(deps)),
             shutdown,
             ping_interval: Duration::from_secs(15),
         }

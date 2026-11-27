@@ -6,12 +6,12 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use chrono::{DateTime, TimeDelta, Utc};
-use domain::{Device, DeviceId, Event, Job, JobId, JobProgress, JobStatus};
+use domain::{Device, DeviceId, Event, Job, JobId, JobProgress, JobStatus, Language};
 use futures_core::stream::BoxStream;
 use futures_util::StreamExt;
 use ports::{
     BusMessage, Clock, DeviceRepository, EventBus, JobRepository, NewDevice, NewJob,
-    NewPairingCode, RepositoryError, SecretGenerator,
+    NewPairingCode, RepositoryError, SecretGenerator, SettingsRepository,
 };
 
 /// A clock that stays at the instant it is given until moved.
@@ -391,5 +391,63 @@ impl EventBus for RecordingBus {
 
     fn subscribe(&self) -> BoxStream<'static, BusMessage> {
         futures_util::stream::empty().boxed()
+    }
+}
+
+#[derive(Debug, Default)]
+struct SettingsState {
+    language: Option<Language>,
+    sets: usize,
+    fail_reads: bool,
+    fail_writes: bool,
+}
+
+/// A [`SettingsRepository`] in memory. Nothing is set at first.
+#[derive(Debug, Default)]
+pub struct InMemorySettings(Mutex<SettingsState>);
+
+impl InMemorySettings {
+    pub fn new() -> InMemorySettings {
+        InMemorySettings::default()
+    }
+
+    /// Makes every read fail.
+    pub fn fail_reads(&self) {
+        self.0.lock().unwrap().fail_reads = true;
+    }
+
+    /// Makes every write fail.
+    pub fn fail_writes(&self) {
+        self.0.lock().unwrap().fail_writes = true;
+    }
+
+    /// How many times `set_language` stored a value.
+    pub fn set_count(&self) -> usize {
+        self.0.lock().unwrap().sets
+    }
+}
+
+#[async_trait]
+impl SettingsRepository for InMemorySettings {
+    async fn language(&self) -> Result<Option<Language>, RepositoryError> {
+        let state = self.0.lock().unwrap();
+        if state.fail_reads {
+            return Err(RepositoryError("settings read failed".into()));
+        }
+        Ok(state.language)
+    }
+
+    async fn set_language(
+        &self,
+        language: Language,
+        _at: DateTime<Utc>,
+    ) -> Result<(), RepositoryError> {
+        let mut state = self.0.lock().unwrap();
+        if state.fail_writes {
+            return Err(RepositoryError("settings write failed".into()));
+        }
+        state.language = Some(language);
+        state.sets += 1;
+        Ok(())
     }
 }

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use ports::{Clock, DeviceRepository, EventBus, JobRepository, SecretGenerator};
+use ports::{
+    Clock, DeviceRepository, EventBus, JobRepository, SecretGenerator, SettingsRepository,
+};
 
 /// What the use cases need, injected by `app`.
 #[derive(Clone)]
@@ -10,4 +12,5 @@ pub struct Deps {
     pub secrets: Arc<dyn SecretGenerator>,
     pub jobs: Arc<dyn JobRepository>,
     pub events: Arc<dyn EventBus>,
+    pub settings: Arc<dyn SettingsRepository>,
 }

@@ -73,8 +73,10 @@ fn contract_is_user_facing() {
             r#"get /api/v1/health "get_health""#,
             r#"get /api/v1/jobs "list_jobs""#,
             r#"get /api/v1/jobs/{id} "get_job""#,
+            r#"get /api/v1/settings/language "get_language""#,
             r#"post /api/v1/devices/pairing-codes "create_pairing_code""#,
             r#"post /api/v1/pairing "pair_device""#,
+            r#"put /api/v1/settings/language "set_language""#,
         ]
     );
     assert!(!doc.to_string().contains("Debug"));
@@ -109,7 +111,10 @@ fn event_schema_is_a_tagged_one_of() {
         })
         .collect();
     types.sort();
-    assert_eq!(types, ["device_revoked", "job", "resync"]);
+    assert_eq!(
+        types,
+        ["device_revoked", "job", "resync", "settings_changed"]
+    );
     let events = &doc["paths"]["/api/v1/events"]["get"]["responses"]["200"]["content"];
     assert!(events.get("text/event-stream").is_some(), "{events}");
 }

@@ -9,4 +9,6 @@ pub enum Event {
     Job(Job),
     /// A device was revoked: its streams must close.
     DeviceRevoked(DeviceId),
+    /// A setting changed: clients reload the settings.
+    SettingsChanged,
 }

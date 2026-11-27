@@ -383,6 +383,120 @@
           {}
         ]
       }
+    },
+    "/api/v1/settings/language": {
+      "get": {
+        "summary": "Returns the language the user chose, `null` when they have not.",
+        "operationId": "get_language",
+        "responses": {
+          "200": {
+            "description": "The chosen language",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguageSettingDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Chooses the language; every client is told through the event stream.",
+        "operationId": "set_language",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LanguageUpdateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The language now chosen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguageSettingDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Body is not JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed body or unknown language",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -508,6 +622,21 @@
           },
           {
             "type": "object",
+            "description": "The settings changed: reload them.",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "settings_changed"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "The subscriber missed events: reload what is shown. The stream ends\nright after it; reconnect.",
             "required": [
               "type"
@@ -625,6 +754,46 @@
           "failed",
           "interrupted"
         ]
+      },
+      "LanguageDto": {
+        "type": "string",
+        "description": "A language the interface and Claude's text can be in.",
+        "enum": [
+          "en",
+          "fr"
+        ]
+      },
+      "LanguageSettingDto": {
+        "type": "object",
+        "description": "The language the user chose.",
+        "required": [
+          "language"
+        ],
+        "properties": {
+          "language": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LanguageDto",
+                "description": "Always present, `null` until the user chooses one; the client then\nfollows its own locale."
+              }
+            ]
+          }
+        }
+      },
+      "LanguageUpdateDto": {
+        "type": "object",
+        "description": "The language to choose.",
+        "required": [
+          "language"
+        ],
+        "properties": {
+          "language": {
+            "$ref": "#/components/schemas/LanguageDto"
+          }
+        }
       },
       "PairingCodeDto": {
         "type": "object",

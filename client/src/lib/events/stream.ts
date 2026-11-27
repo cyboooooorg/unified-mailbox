@@ -31,7 +31,8 @@ const EVENTS_PATH = '/api/v1/events';
 const KNOWN_TYPES: ReadonlySet<string> = new Set<EventDto['type']>([
 	'job',
 	'device_revoked',
-	'resync'
+	'resync',
+	'settings_changed'
 ]);
 
 /** How one connection ended. */
