@@ -51,6 +51,7 @@ mod tests {
             jobs: Arc::new(InMemoryJobs::new()),
             events: bus.clone(),
             settings: Arc::new(InMemorySettings::new()),
+            job_ends: Arc::new(crate::UnsavedJobEnds::new()),
         };
         Fixture {
             deps,

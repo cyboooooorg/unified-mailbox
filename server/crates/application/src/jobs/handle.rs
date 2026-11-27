@@ -41,7 +41,8 @@ impl JobHandle {
     /// Runs the work to its end and records the outcome: `Succeeded`,
     /// `Failed` with the error message, or `Failed` with "job panicked"
     /// when the work panics. The final counters are always saved and
-    /// published. Storage failures are logged and never stop the job.
+    /// published. Storage failures are logged and never stop the job; an
+    /// end that cannot be saved is kept in [`super::UnsavedJobEnds`].
     ///
     /// The work reports its advance on the [`Progress`] it receives.
     pub async fn run<F, Fut>(self, work: F) -> JobStatus
@@ -152,7 +153,8 @@ impl Progress {
             )
             .await
         {
-            tracing::warn!(job = snapshot.id.get(), error = %err, "cannot save the job end");
+            tracing::warn!(job = snapshot.id.get(), error = %err, "cannot save the job end, kept to retry");
+            self.deps.job_ends.keep(snapshot.clone(), now);
         }
         self.deps.events.publish(Event::Job(snapshot));
     }

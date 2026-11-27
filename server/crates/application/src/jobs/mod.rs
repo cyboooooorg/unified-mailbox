@@ -5,7 +5,9 @@
 //! [`JobHandle::run`] drives the work, typically from a spawned task. The
 //! work receives a [`Progress`] and calls [`Progress::step`] once per item;
 //! counters are saved and published to the event bus at most every
-//! [`PROGRESS_INTERVAL`], and the end is always saved and published.
+//! [`PROGRESS_INTERVAL`], and the end is always saved and published. An
+//! end the store refuses is kept in [`UnsavedJobEnds`] until
+//! [`FlushJobEnds`] writes it.
 
 use chrono::TimeDelta;
 
@@ -14,12 +16,14 @@ mod queries;
 mod recover;
 mod start_job;
 mod subscribe;
+mod unsaved;
 
 pub use handle::*;
 pub use queries::*;
 pub use recover::*;
 pub use start_job::*;
 pub use subscribe::*;
+pub use unsaved::*;
 
 /// The least time between two saved and published progress updates of a job.
 pub const PROGRESS_INTERVAL: TimeDelta = TimeDelta::milliseconds(300);
@@ -63,6 +67,7 @@ mod tests {
             jobs: jobs.clone(),
             events: bus.clone(),
             settings: Arc::new(InMemorySettings::new()),
+            job_ends: Arc::new(UnsavedJobEnds::new()),
         };
         Fixture {
             deps,
@@ -331,6 +336,76 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    /// The job as the store holds it, without the kept ends.
+    async fn in_store(f: &Fixture, id: JobId) -> Job {
+        ports::JobRepository::get(f.jobs.as_ref(), id)
+            .await
+            .unwrap()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn refused_end_is_published_and_served_from_memory() {
+        let f = fixture();
+        let other = f.start(None).await;
+        let handle = f.start(None).await;
+        let id = handle.id();
+        let jobs = f.jobs.clone();
+        let status = handle
+            .run(|progress| async move {
+                progress.step(true).await;
+                jobs.fail_writes(true);
+                Ok(())
+            })
+            .await;
+        assert_eq!(status, JobStatus::Succeeded);
+        assert_eq!(in_store(&f, id).await.status, JobStatus::Running);
+        assert_eq!(f.deps.job_ends.len(), 1);
+
+        let ended = f.job_events().last().cloned().unwrap();
+        assert_eq!(ended.status, JobStatus::Succeeded);
+        assert_eq!(f.stored(id).await, ended);
+        let active = ListActiveJobs::new(f.deps.clone()).execute().await.unwrap();
+        assert_eq!(
+            active.iter().map(|j| j.id).collect::<Vec<_>>(),
+            vec![other.id()]
+        );
+    }
+
+    #[tokio::test]
+    async fn flush_keeps_a_refused_end_until_the_store_takes_it() {
+        let f = fixture();
+        let handle = f.start(Some(4)).await;
+        let id = handle.id();
+        let jobs = f.jobs.clone();
+        handle
+            .run(|progress| async move {
+                progress.step(false).await;
+                jobs.fail_writes(true);
+                Err(JobError("boom".into()))
+            })
+            .await;
+        let flush = FlushJobEnds::new(f.deps.clone());
+
+        assert_eq!(flush.execute().await, 1);
+        assert_eq!(in_store(&f, id).await.status, JobStatus::Running);
+
+        f.jobs.fail_writes(false);
+        // Saved with the time it ended, not the time of the retry.
+        f.clock.advance(TimeDelta::seconds(30));
+        assert_eq!(flush.execute().await, 0);
+        assert!(f.deps.job_ends.is_empty());
+        let job = in_store(&f, id).await;
+        assert_eq!(job.status, JobStatus::Failed);
+        assert_eq!(job.error.as_deref(), Some("boom"));
+        assert_eq!(
+            (job.progress.done, job.progress.failed, job.progress.total),
+            (1, 1, Some(4))
+        );
+        assert_eq!(job.finished_at, Some(t0()));
+        assert_eq!(f.stored(id).await, job);
     }
 
     fn finished(id: i64, ago: TimeDelta) -> Job {

@@ -11,8 +11,12 @@ impl GetJob {
         GetJob(deps)
     }
 
-    /// `None` when the job is unknown or already purged.
+    /// `None` when the job is unknown or already purged. An end not
+    /// written yet is returned as it was published.
     pub async fn execute(&self, id: JobId) -> Result<Option<Job>, RepositoryError> {
+        if let Some(job) = self.0.job_ends.get(id) {
+            return Ok(Some(job));
+        }
         self.0.jobs.get(id).await
     }
 }
@@ -25,8 +29,10 @@ impl ListActiveJobs {
         ListActiveJobs(deps)
     }
 
-    /// Oldest first.
+    /// Oldest first. A job whose end is not written yet is left out.
     pub async fn execute(&self) -> Result<Vec<Job>, RepositoryError> {
-        self.0.jobs.list_running().await
+        let mut running = self.0.jobs.list_running().await?;
+        running.retain(|job| !self.0.job_ends.contains(job.id));
+        Ok(running)
     }
 }

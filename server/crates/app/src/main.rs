@@ -10,8 +10,9 @@ use std::fs::DirBuilder;
 use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::time::Duration;
 
-use application::{CreatePairingCode, Deps, RecoverJobs};
+use application::{CreatePairingCode, Deps, FlushJobEnds, RecoverJobs, UnsavedJobEnds};
 use chrono::SecondsFormat;
 use cli::Command;
 use config::Config;
@@ -78,6 +79,7 @@ async fn main() -> ExitCode {
         jobs: store.clone(),
         events: Arc::new(events_memory::MemoryBus::new(events_memory::CAPACITY)),
         settings: store.clone(),
+        job_ends: Arc::new(UnsavedJobEnds::new()),
     };
 
     let code = match command {
@@ -121,17 +123,25 @@ async fn serve(config: &Config, deps: Deps) -> ExitCode {
     if let Some(dir) = &config.client_dir {
         tracing::info!(client_dir = %dir.display(), "serving the web client");
     }
+    let retry = tokio::spawn(retry_job_ends(deps.clone()));
     let app = http_api::router_with_client(
-        http_api::AppState::new(deps, shutdown_rx),
+        http_api::AppState::new(deps.clone(), shutdown_rx),
         config.client_dir.clone().map(http_api::ClientDir::new),
     );
-    match axum::serve(listener, app)
+    let served = axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown_signal().await;
             let _ = shutdown_tx.send(true);
         })
-        .await
-    {
+        .await;
+    // A last try for the job ends the store refused, whatever ended the
+    // server: what is still unsaved is found `interrupted` at next start.
+    retry.abort();
+    let unsaved = FlushJobEnds::new(deps).execute().await;
+    if unsaved > 0 {
+        tracing::warn!(unsaved, "job ends lost: marked interrupted at next start");
+    }
+    match served {
         Ok(()) => {
             tracing::info!("stopped");
             ExitCode::SUCCESS
@@ -140,6 +150,22 @@ async fn serve(config: &Config, deps: Deps) -> ExitCode {
             eprintln!("server error: {err}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// How often [`retry_job_ends`] writes the job ends the store refused.
+const JOB_ENDS_RETRY: Duration = Duration::from_secs(30);
+
+/// Writes the job ends the store refused again, every [`JOB_ENDS_RETRY`],
+/// until the task is aborted.
+async fn retry_job_ends(deps: Deps) {
+    let flush = FlushJobEnds::new(deps);
+    let mut ticks =
+        tokio::time::interval_at(tokio::time::Instant::now() + JOB_ENDS_RETRY, JOB_ENDS_RETRY);
+    ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        ticks.tick().await;
+        flush.execute().await;
     }
 }
 

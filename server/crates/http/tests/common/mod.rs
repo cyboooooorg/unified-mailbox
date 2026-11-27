@@ -3,10 +3,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use application::Deps;
 use application::testing::{
     FixedClock, InMemoryDevices, InMemoryJobs, InMemorySettings, SeqSecrets,
 };
+use application::{Deps, UnsavedJobEnds};
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, Response};
@@ -54,6 +54,7 @@ fn harness_parts(capacity: usize) -> (Harness, Arc<InMemoryDevices>) {
             jobs: jobs.clone(),
             events: bus.clone(),
             settings: Arc::new(InMemorySettings::new()),
+            job_ends: Arc::new(UnsavedJobEnds::new()),
         },
         shutdown_rx,
     );
