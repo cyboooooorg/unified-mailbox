@@ -387,6 +387,9 @@ mod tests {
                 Err(JobError("boom".into()))
             })
             .await;
+        let kept = f.stored(id).await;
+        assert_eq!(kept.status, JobStatus::Failed);
+        assert_eq!(kept.error.as_deref(), Some("boom"));
         let flush = FlushJobEnds::new(f.deps.clone());
 
         assert_eq!(flush.execute().await, 1);
@@ -406,6 +409,23 @@ mod tests {
         );
         assert_eq!(job.finished_at, Some(t0()));
         assert_eq!(f.stored(id).await, job);
+    }
+
+    #[tokio::test]
+    async fn flush_saves_every_kept_end() {
+        let f = fixture();
+        let first = f.start(None).await;
+        let second = f.start(None).await;
+        let (a, b) = (first.id(), second.id());
+        f.jobs.fail_writes(true);
+        first.run(|_| async { Ok(()) }).await;
+        second.run(|_| async { Err(JobError("boom".into())) }).await;
+        f.jobs.fail_writes(false);
+        assert_eq!(f.deps.job_ends.len(), 2);
+
+        assert_eq!(FlushJobEnds::new(f.deps.clone()).execute().await, 0);
+        assert_eq!(in_store(&f, a).await.status, JobStatus::Succeeded);
+        assert_eq!(in_store(&f, b).await.status, JobStatus::Failed);
     }
 
     fn finished(id: i64, ago: TimeDelta) -> Job {

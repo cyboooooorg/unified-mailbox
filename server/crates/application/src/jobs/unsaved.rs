@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
@@ -40,8 +40,8 @@ impl UnsavedJobEnds {
         self.0.lock().unwrap().get(&id).map(|(job, _)| job.clone())
     }
 
-    pub(super) fn contains(&self, id: JobId) -> bool {
-        self.0.lock().unwrap().contains_key(&id)
+    pub(super) fn ids(&self) -> HashSet<JobId> {
+        self.0.lock().unwrap().keys().copied().collect()
     }
 
     fn all(&self) -> Vec<(Job, DateTime<Utc>)> {

@@ -279,7 +279,9 @@ stream's items.
 - `app`: SIGINT with an open stream stops the server (next to the
   existing shutdown test); a job left running before a restart is
   `interrupted` after it; a server that fails to bind leaves a running
-  job `running`.
+  job `running`; with a paused clock, a refused job end is written
+  again after one 30 s period and not before; stopping aborts the
+  retry, writes the kept ends once more and counts those still refused.
 
 ## Documentation
 

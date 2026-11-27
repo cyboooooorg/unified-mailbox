@@ -123,7 +123,7 @@ async fn serve(config: &Config, deps: Deps) -> ExitCode {
     if let Some(dir) = &config.client_dir {
         tracing::info!(client_dir = %dir.display(), "serving the web client");
     }
-    let retry = tokio::spawn(retry_job_ends(deps.clone()));
+    let retry = tokio::spawn(retry_job_ends(deps.clone(), JOB_ENDS_RETRY));
     let app = http_api::router_with_client(
         http_api::AppState::new(deps.clone(), shutdown_rx),
         config.client_dir.clone().map(http_api::ClientDir::new),
@@ -134,13 +134,7 @@ async fn serve(config: &Config, deps: Deps) -> ExitCode {
             let _ = shutdown_tx.send(true);
         })
         .await;
-    // A last try for the job ends the store refused, whatever ended the
-    // server: what is still unsaved is found `interrupted` at next start.
-    retry.abort();
-    let unsaved = FlushJobEnds::new(deps).execute().await;
-    if unsaved > 0 {
-        tracing::warn!(unsaved, "job ends lost: marked interrupted at next start");
-    }
+    stop_retrying_job_ends(&retry, deps).await;
     match served {
         Ok(()) => {
             tracing::info!("stopped");
@@ -156,17 +150,28 @@ async fn serve(config: &Config, deps: Deps) -> ExitCode {
 /// How often [`retry_job_ends`] writes the job ends the store refused.
 const JOB_ENDS_RETRY: Duration = Duration::from_secs(30);
 
-/// Writes the job ends the store refused again, every [`JOB_ENDS_RETRY`],
-/// until the task is aborted.
-async fn retry_job_ends(deps: Deps) {
+/// Writes the job ends the store refused again, every `period` (the first
+/// time one `period` after the start), until the task is aborted.
+async fn retry_job_ends(deps: Deps, period: Duration) {
     let flush = FlushJobEnds::new(deps);
-    let mut ticks =
-        tokio::time::interval_at(tokio::time::Instant::now() + JOB_ENDS_RETRY, JOB_ENDS_RETRY);
+    let mut ticks = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
     ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         ticks.tick().await;
         flush.execute().await;
     }
+}
+
+/// Stops the `retry` task, then tries the refused job ends once more,
+/// whatever ended the server. Returns how many are still unsaved: they are
+/// lost, and found `interrupted` at the next start.
+async fn stop_retrying_job_ends(retry: &tokio::task::JoinHandle<()>, deps: Deps) -> usize {
+    retry.abort();
+    let unsaved = FlushJobEnds::new(deps).execute().await;
+    if unsaved > 0 {
+        tracing::warn!(unsaved, "job ends lost: marked interrupted at next start");
+    }
+    unsaved
 }
 
 async fn pair_code(deps: Deps) -> ExitCode {
@@ -245,8 +250,99 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
+    use application::testing::{
+        FixedClock, InMemoryDevices, InMemoryJobs, InMemorySettings, RecordingBus, SeqSecrets,
+    };
+    use application::{GetJob, StartJob};
+    use chrono::TimeZone;
+    use domain::{JobId, JobKind, JobStatus};
+    use ports::JobRepository;
+
     use super::*;
     use crate::config::Config;
+
+    /// `Deps` over in-memory doubles, and the job store to make it fail.
+    fn job_deps() -> (Deps, Arc<InMemoryJobs>) {
+        let jobs = Arc::new(InMemoryJobs::new());
+        let deps = Deps {
+            repo: Arc::new(InMemoryDevices::new()),
+            clock: Arc::new(FixedClock::new(
+                chrono::Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+            )),
+            secrets: Arc::new(SeqSecrets::new()),
+            jobs: jobs.clone(),
+            events: Arc::new(RecordingBus::new()),
+            settings: Arc::new(InMemorySettings::new()),
+            job_ends: Arc::new(UnsavedJobEnds::new()),
+        };
+        (deps, jobs)
+    }
+
+    /// Runs a job to success while the store refuses its end.
+    async fn refused_end(deps: &Deps, jobs: &InMemoryJobs) -> JobId {
+        let handle = StartJob::new(deps.clone())
+            .execute(JobKind::new("labels_sync").unwrap(), None)
+            .await
+            .unwrap();
+        let id = handle.id();
+        jobs.fail_writes(true);
+        handle.run(|_| async { Ok(()) }).await;
+        jobs.fail_writes(false);
+        id
+    }
+
+    async fn status_in_store(jobs: &InMemoryJobs, id: JobId) -> JobStatus {
+        jobs.get(id).await.unwrap().unwrap().status
+    }
+
+    /// Lets the spawned task run while the paused clock stands still.
+    async fn settle() {
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn refused_end_is_written_again_after_one_period() {
+        let (deps, jobs) = job_deps();
+        let id = refused_end(&deps, &jobs).await;
+        let retry = tokio::spawn(retry_job_ends(deps.clone(), JOB_ENDS_RETRY));
+
+        settle().await;
+        tokio::time::advance(JOB_ENDS_RETRY - Duration::from_millis(1)).await;
+        settle().await;
+        assert_eq!(status_in_store(&jobs, id).await, JobStatus::Running);
+
+        tokio::time::advance(Duration::from_millis(1)).await;
+        settle().await;
+        assert_eq!(status_in_store(&jobs, id).await, JobStatus::Succeeded);
+        assert!(deps.job_ends.is_empty());
+        retry.abort();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stopping_aborts_the_retry_and_writes_the_ends_once_more() {
+        let (deps, jobs) = job_deps();
+        let id = refused_end(&deps, &jobs).await;
+        let retry = tokio::spawn(retry_job_ends(deps.clone(), JOB_ENDS_RETRY));
+
+        assert_eq!(stop_retrying_job_ends(&retry, deps.clone()).await, 0);
+        assert_eq!(status_in_store(&jobs, id).await, JobStatus::Succeeded);
+        assert!(retry.await.unwrap_err().is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn stopping_counts_the_ends_still_refused() {
+        let (deps, jobs) = job_deps();
+        let id = refused_end(&deps, &jobs).await;
+        let retry = tokio::spawn(std::future::pending::<()>());
+        jobs.fail_writes(true);
+
+        assert_eq!(stop_retrying_job_ends(&retry, deps.clone()).await, 1);
+        let kept = GetJob::new(deps).execute(id).await.unwrap().unwrap();
+        assert_eq!(kept.status, JobStatus::Succeeded);
+        assert_eq!(status_in_store(&jobs, id).await, JobStatus::Running);
+    }
 
     fn config(data_dir: &Path, key_file: Option<&Path>) -> Config {
         let mut vars = std::collections::HashMap::new();

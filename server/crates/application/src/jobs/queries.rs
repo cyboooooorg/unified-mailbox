@@ -31,8 +31,11 @@ impl ListActiveJobs {
 
     /// Oldest first. A job whose end is not written yet is left out.
     pub async fn execute(&self) -> Result<Vec<Job>, RepositoryError> {
+        // The kept ids are read before the store: an end saved in between
+        // is already out of the store's running jobs, so it never shows.
+        let kept = self.0.job_ends.ids();
         let mut running = self.0.jobs.list_running().await?;
-        running.retain(|job| !self.0.job_ends.contains(job.id));
+        running.retain(|job| !kept.contains(&job.id));
         Ok(running)
     }
 }
