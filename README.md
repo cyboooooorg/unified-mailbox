@@ -102,7 +102,7 @@ from (`server/.env` with the command above) to start.
 | `DRY_RUN` | `true` | Change nothing in the mailboxes, except actions the user confirmed. |
 | `SPAM_THRESHOLD` | `90` | Spam or phishing confidence, from 0 to 100, at or above which a mail goes to the junk folder. |
 | `PROTECT_KNOWN_SENDERS` | `true` | Never send to junk a mail from a sender the user knows and that passed DMARC. |
-| `ARCHIVE_CATEGORIES` | empty | Comma-separated tag keys (such as `newsletter,promotion`) whose mails are archived once classified. |
+| `ARCHIVE_CATEGORIES` | empty | Comma-separated tag keys (such as `newsletter,promotion`) whose mails are archived once classified. `unknown` is reserved (mails the classifier refused) and rejected. |
 | `LISTEN_ADDR` | `127.0.0.1:8000` | Socket address (`host:port`, IPv6 as `[::1]:8000`) the API listens on. Behind Tailscale, keep the loopback address and expose it with `tailscale serve`, or use the tailnet address. In Docker, use `0.0.0.0:8000` and publish the port on the tailnet interface only. |
 | `CLIENT_DIR` | empty | Directory of the built web client, served on every path outside `/api`. It must hold an `index.html`, or the server refuses to start. Unset: the API only. See [Web client](#web-client). |
 | `RUST_LOG` | `info` | Log filter, in [`tracing-subscriber` `EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) syntax, such as `info,sqlite=debug`. Logs go to stderr. |

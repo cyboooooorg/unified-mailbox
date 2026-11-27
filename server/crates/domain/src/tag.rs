@@ -28,7 +28,8 @@ const SPAM_KEY: &str = "spam";
 pub struct TagKey(String);
 
 impl TagKey {
-    /// Reserved for the "unknown" category (the classifier refused).
+    /// Reserved for `Category::Unknown` (the classifier refused the
+    /// mail); never a tag.
     pub const RESERVED: &str = "unknown";
     pub const MAX_LEN: usize = 30;
 

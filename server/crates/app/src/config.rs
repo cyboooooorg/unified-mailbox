@@ -10,7 +10,7 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use domain::{SpamConfidence, SpamPolicy, TagKey};
+use domain::{SpamConfidence, SpamPolicy, TagError, TagKey};
 use sqlite::StoreConfig;
 use tracing_subscriber::EnvFilter;
 
@@ -209,15 +209,21 @@ impl Parser<'_> {
                 Ok(key) => {
                     keys.insert(key);
                 }
-                Err(_) => invalid.push(item.to_owned()),
+                Err(TagError::ReservedKey) => invalid.push((
+                    item.to_owned(),
+                    format!(
+                        "a tag key: {:?} is reserved for mails the classifier refused",
+                        TagKey::RESERVED
+                    ),
+                )),
+                Err(_) => invalid.push((
+                    item.to_owned(),
+                    "a tag key (lower-case letters and digits, parts joined by '-')".to_owned(),
+                )),
             }
         }
-        for item in invalid {
-            self.fail(
-                name,
-                &item,
-                "a tag key (lower-case letters and digits, parts joined by '-')",
-            );
+        for (item, expected) in invalid {
+            self.fail(name, &item, &expected);
         }
         keys
     }
@@ -478,6 +484,19 @@ mod tests {
             assert_eq!(errs.len(), 1, "{value}");
             assert_eq!(errs[0].variable, "ARCHIVE_CATEGORIES");
         }
+    }
+
+    #[test]
+    fn archive_categories_reserved_key_has_its_own_message() {
+        for value in ["unknown", "Unknown"] {
+            let errs = errors(&[("ARCHIVE_CATEGORIES", value)]);
+            assert_eq!(errs.len(), 1, "{value}");
+            assert!(errs[0].to_string().contains("reserved"), "{}", errs[0]);
+        }
+        let errs = errors(&[("ARCHIVE_CATEGORIES", "newsletter,unknown,a b")]);
+        assert_eq!(errs.len(), 2);
+        assert!(errs[0].to_string().contains("reserved"), "{}", errs[0]);
+        assert!(!errs[1].to_string().contains("reserved"), "{}", errs[1]);
     }
 
     #[test]
