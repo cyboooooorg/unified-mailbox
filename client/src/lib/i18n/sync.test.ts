@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { browserLanguage, createLanguageSync, type LanguageSyncDeps } from './sync';
+import { createLanguageSync, type LanguageSyncDeps } from './sync';
 import type { Language } from './locale.svelte';
 
-function fake(init: {
-	server: Language | null | undefined;
-	current?: Language;
-	preferred?: string[];
-	putOk?: boolean;
-}) {
+function fake(init: { server: Language | null | undefined; current?: Language; putOk?: boolean }) {
 	const calls: string[] = [];
 	const state = { server: init.server, current: init.current ?? 'en' };
 	const deps: LanguageSyncDeps = {
@@ -21,21 +16,10 @@ function fake(init: {
 		apply: (language) => {
 			calls.push(`apply:${language}`);
 			state.current = language;
-		},
-		preferred: () => init.preferred ?? []
+		}
 	};
 	return { calls, state, sync: createLanguageSync(deps) };
 }
-
-describe('browserLanguage', () => {
-	it('browser_language_matches_the_primary_subtag', () => {
-		expect(browserLanguage(['fr-CA'])).toBe('fr');
-		expect(browserLanguage(['de', 'fr'])).toBe('fr');
-		expect(browserLanguage(['de'])).toBe('en');
-		expect(browserLanguage([])).toBe('en');
-		expect(browserLanguage(['EN-gb'])).toBe('en');
-	});
-});
 
 describe('language sync', () => {
 	it('server_language_is_applied', async () => {
@@ -50,18 +34,19 @@ describe('language sync', () => {
 		expect(f.calls).toEqual([]);
 	});
 
-	it('null_language_puts_the_browser_language_once', async () => {
-		const f = fake({ server: null, current: 'en', preferred: ['fr-FR'] });
+	it('null_language_puts_the_language_on_screen_once', async () => {
+		const f = fake({ server: null, current: 'fr' });
 		await f.sync.sync();
-		expect(f.calls).toEqual(['put:fr', 'apply:fr']);
+		expect(f.calls).toEqual(['put:fr']);
 		await f.sync.sync();
-		expect(f.calls).toEqual(['put:fr', 'apply:fr']);
+		expect(f.calls).toEqual(['put:fr']);
 	});
 
 	it('null_language_put_failure_applies_nothing', async () => {
-		const f = fake({ server: null, preferred: ['fr'], putOk: false });
+		const f = fake({ server: null, current: 'fr', putOk: false });
 		await f.sync.sync();
 		expect(f.calls).toEqual(['put:fr']);
+		expect(f.state.current).toBe('fr');
 	});
 
 	it('failed_get_keeps_the_cached_language', async () => {

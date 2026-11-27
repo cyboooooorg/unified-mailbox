@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { genericError } from '../api/errors';
 	import { languageSync } from './app';
-	import { locale, type Language } from './locale.svelte';
+	import { locale, LANGUAGE_NAMES, type Language } from './locale.svelte';
+	import { locales } from '#lib/paraglide/runtime.js';
 	import { m } from '#lib/paraglide/messages.js';
 
 	let error = $state<string | null>(null);
@@ -21,8 +22,9 @@
 <label>
 	{m.language_label()}
 	<select bind:this={select} value={locale.current} {onchange}>
-		<option value="en">English</option>
-		<option value="fr">Français</option>
+		{#each locales as code (code)}
+			<option value={code}>{LANGUAGE_NAMES[code]}</option>
+		{/each}
 	</select>
 </label>
 {#if error}

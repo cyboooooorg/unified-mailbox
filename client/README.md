@@ -136,15 +136,26 @@ Messages are compiled by [Paraglide](https://paraglidejs.com) (`@inlang/paraglid
   the language (`/api/v1/settings/language`) and is the truth; `localStorage`
   is only a cache that makes the first paint right, and it is kept on
   sign-out. The first device to connect, when the server has no language yet,
-  stores its browser language. The status page syncs on every stream connect
+  stores the language it shows (Paraglide's resolution: `localStorage`, then the
+  browser language, then English). The status page syncs on every stream connect
   (reconnects and `resync` included) and on `settings_changed`; a failed
   request keeps the cached language. `LanguagePicker.svelte` stores the
   choice on the server first and applies it only when that succeeded.
-- Language names are written in their own language and are not translated;
-  `Unified Mailbox` is not translated either.
+- Language names are written in their own language and are not translated
+  (`LANGUAGE_NAMES` in `locale.svelte.ts`; the picker lists Paraglide's
+  `locales`); `Unified Mailbox` is not translated either. The server status
+  code is translated through `healthLabel` (`src/lib/i18n/health.ts`).
 
 To add a message: add the key to `messages/en.json` and `messages/fr.json`
-(the same parameters in both), then call `m.<key>()`. To add a language: add
-`messages/<code>.json`, add the code to `locales` in
-`project.inlang/settings.json`, and add the variant to `Language` in the
-server (`LanguageDto` in the contract, then `npm run generate`).
+(the same parameters in both), then call `m.<key>()`.
+
+To add a language, in the same change:
+
+1. add `messages/<code>.json` with every key of `messages/en.json`;
+2. add the code to `locales` in `project.inlang/settings.json`;
+3. add its name, in itself, to `LANGUAGE_NAMES` in
+   `src/lib/i18n/locale.svelte.ts` (`npm run check` fails until it has one,
+   once the contract lists the code);
+4. add the variant to `Language` and `LanguageDto` in the server, then
+   regenerate the contract (`mise run openapi`) and the client types
+   (`npm run generate`).

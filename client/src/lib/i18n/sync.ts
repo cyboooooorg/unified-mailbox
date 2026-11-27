@@ -7,21 +7,12 @@ export interface LanguageSyncDeps {
 	put(language: Language): Promise<boolean>;
 	current(): Language;
 	apply(language: Language): void;
-	preferred(): readonly string[];
-}
-
-/** The first preferred language whose primary subtag is supported, else English. */
-export function browserLanguage(preferred: readonly string[]): Language {
-	for (const tag of preferred) {
-		const primary = tag.toLowerCase().split('-')[0];
-		if (primary === 'en' || primary === 'fr') return primary;
-	}
-	return 'en';
 }
 
 /**
  * The server holds the language; the locale (and its localStorage cache) follows it.
- * The first device to connect stores its browser language.
+ * The first device to connect stores the language it shows (Paraglide's own
+ * resolution picked it: localStorage, then the browser language).
  */
 export function createLanguageSync(deps: LanguageSyncDeps) {
 	return {
@@ -29,8 +20,8 @@ export function createLanguageSync(deps: LanguageSyncDeps) {
 			const server = await deps.get();
 			if (server === undefined) return;
 			if (server === null) {
-				const language = browserLanguage(deps.preferred());
-				if (await deps.put(language)) deps.apply(language);
+				// Already on screen: nothing to apply.
+				await deps.put(deps.current());
 			} else if (server !== deps.current()) {
 				deps.apply(server);
 			}

@@ -17,13 +17,14 @@
 	"status_stream_reconnecting": "Reconnexion…",
 	"status_stream_stopped": "Déconnecté",
 	"status_server_heading": "Serveur",
-	"status_server_line": "État : {status}, version {version}",
+	"status_health_ok": "En service",
+	"status_server_line": "État : {status}, version {version}",
 	"status_devices_heading": "Appareils",
 	"status_device_current": "Cet appareil",
 	"status_jobs_heading": "Tâches en cours",
 	"status_jobs_none": "Aucune tâche en cours.",
-	"status_job_progress": "{kind} : {done} sur {total}",
-	"status_job_progress_open": "{kind} : {done}",
+	"status_job_progress": "{kind} : {done} sur {total}",
+	"status_job_progress_open": "{kind} : {done}",
 	"status_job_failed": [
 		{
 			"declarations": ["input count", "input countText", "local countPlural = count: plural"],

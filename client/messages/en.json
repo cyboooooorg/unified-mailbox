@@ -17,6 +17,7 @@
 	"status_stream_reconnecting": "Reconnecting…",
 	"status_stream_stopped": "Disconnected",
 	"status_server_heading": "Server",
+	"status_health_ok": "Operational",
 	"status_server_line": "Status: {status}, version {version}",
 	"status_devices_heading": "Devices",
 	"status_device_current": "This device",

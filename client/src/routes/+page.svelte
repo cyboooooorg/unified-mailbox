@@ -2,8 +2,10 @@
 	import { api } from '../lib/api/app';
 	import { session } from '../lib/auth/session.svelte';
 	import { connectEvents, type StreamState } from '../lib/events/stream';
+	import { createStatusHandlers } from '../lib/status/handlers';
 	import { createDeviceSync, createJobSync, type Loaded } from '../lib/status/sync';
 	import { formatNumber } from '../lib/i18n/format';
+	import { healthLabel } from '../lib/i18n/health';
 	import { jobKindLabel } from '../lib/i18n/job-kind';
 	import { languageSync } from '../lib/i18n/app';
 	import LanguagePicker from '../lib/i18n/LanguagePicker.svelte';
@@ -14,7 +16,6 @@
 	type Health = components['schemas']['HealthDto'];
 	type Device = components['schemas']['DeviceDto'];
 	type Job = components['schemas']['JobDto'];
-	type EventDto = components['schemas']['EventDto'];
 
 	const STREAM_LABELS: Record<StreamState, () => string> = {
 		connecting: m.status_stream_connecting,
@@ -50,25 +51,18 @@
 		}
 	}
 
-	function reload() {
-		void loadHealth();
-		void deviceSync.load();
-		void jobSync.load();
-		void languageSync.sync();
-	}
-
-	function onEvent(event: EventDto) {
-		if (event.type === 'job') jobSync.apply(event.job);
-		else if (event.type === 'device_revoked') deviceSync.deviceRevoked();
-		else if (event.type === 'settings_changed') void languageSync.sync();
-		// `resync` already reloaded: the reader called `onConnect`.
-	}
+	const { onConnect, onEvent } = createStatusHandlers({
+		loadHealth,
+		deviceSync,
+		jobSync,
+		languageSync
+	});
 
 	$effect(() => {
 		const controller = new AbortController();
 		void connectEvents({
 			tokens: session.tokens,
-			onConnect: reload,
+			onConnect,
 			onEvent,
 			onUnauthorized: () => session.signOut(),
 			onState: (state) => (stream = state),
@@ -90,7 +84,7 @@
 		{#if healthFailed}
 			<p>{m.status_unreachable()}</p>
 		{:else if health}
-			<p>{m.status_server_line({ status: health.status, version: health.version })}</p>
+			<p>{m.status_server_line({ status: healthLabel(health.status), version: health.version })}</p>
 		{:else}
 			<p>{m.status_loading()}</p>
 		{/if}

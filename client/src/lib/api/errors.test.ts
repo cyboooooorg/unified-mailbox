@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
-import { baseLocale, getLocale, overwriteGetLocale } from '#lib/paraglide/runtime.js';
+import { getLocale, overwriteGetLocale } from '#lib/paraglide/runtime.js';
 import { describeError, errorMessage, genericError } from './errors';
 
 function load(language: string): Record<string, string> {
@@ -33,7 +33,14 @@ describe('describeError', () => {
 		{ error: { code: 'constructor' } },
 		'x'
 	])('falls back to the generic message for %j', (body) => {
-		expect(describeError(body)).toBe(genericError());
+		for (const [language, messages] of [
+			['en', en],
+			['fr', fr]
+		] as const) {
+			overwriteGetLocale(() => language);
+			expect(describeError(body)).toBe(messages.error_generic);
+			expect(genericError()).toBe(messages.error_generic);
+		}
 	});
 
 	it('has a message for every code', () => {
@@ -48,15 +55,5 @@ describe('describeError', () => {
 		);
 		overwriteGetLocale(() => 'en');
 		expect(errorMessage('invalid_pairing_code')).toBe(en.error_invalid_pairing_code);
-		expect(baseLocale).toBe('en');
-	});
-
-	it.each([
-		['en', en],
-		['fr', fr]
-	] as const)('malformed_body_gives_the_generic_message in %s', (language, messages) => {
-		overwriteGetLocale(() => language);
-		expect(describeError({ error: { code: 'nope' } })).toBe(messages.error_generic);
-		expect(genericError()).toBe(messages.error_generic);
 	});
 });

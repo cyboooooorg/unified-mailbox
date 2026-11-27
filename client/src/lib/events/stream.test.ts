@@ -260,6 +260,17 @@ describe('connectEvents', () => {
 		await s.done;
 	});
 
+	it('settings_changed reaches onEvent', async () => {
+		const s = start();
+		await flush();
+		s.last().push('data: {"type":"settings_changed"}\n\n');
+		await flush();
+		expect(s.onEvent).toHaveBeenCalledExactlyOnceWith({ type: 'settings_changed' });
+		expect(s.onConnect).toHaveBeenCalledTimes(1);
+		s.controller.abort();
+		await s.done;
+	});
+
 	it('retry field changes the reconnect delay', async () => {
 		const s = start();
 		await flush();

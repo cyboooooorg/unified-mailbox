@@ -9,4 +9,9 @@ describe('jobKindLabel', () => {
 	it('unknown_kind_is_shown_raw', () => {
 		expect(jobKindLabel('labels_sync')).toBe('labels_sync');
 	});
+
+	it.each(['constructor', 'toString'])('inherited_property_%s_is_shown_raw', (kind) => {
+		expect(jobKindLabel(kind)).toBe(kind);
+		expect(jobKindLabel(kind, { other: () => 'x' })).toBe(kind);
+	});
 });

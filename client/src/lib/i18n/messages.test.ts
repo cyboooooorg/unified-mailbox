@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 function load(language: string): Record<string, unknown> {
 	const path = new URL(`../../../messages/${language}.json`, import.meta.url);
@@ -53,7 +53,22 @@ describe('message files', () => {
 	});
 });
 
+describe('french punctuation', () => {
+	afterEach(async () => (await import('./locale.svelte')).locale.set('en'));
+
+	it('colon_follows_a_narrow_no_break_space', async () => {
+		const { m } = await import('#lib/paraglide/messages.js');
+		const { locale } = await import('./locale.svelte');
+		locale.set('fr');
+		expect(m.status_server_line({ status: 'OK', version: '1' })).toBe('État\u202f: OK, version 1');
+		expect(m.status_job_progress({ kind: 'k', done: '1', total: '2' })).toBe('k\u202f: 1 sur 2');
+		expect(m.status_job_progress_open({ kind: 'k', done: '1' })).toBe('k\u202f: 1');
+	});
+});
+
 describe('plural messages', () => {
+	afterEach(async () => (await import('./locale.svelte')).locale.set('en'));
+
 	it('job_failed_selects_the_variant_from_the_count', async () => {
 		const { m } = await import('#lib/paraglide/messages.js');
 		const { locale } = await import('./locale.svelte');
@@ -63,6 +78,5 @@ describe('plural messages', () => {
 		locale.set('fr');
 		expect(m.status_job_failed({ count: 1, countText: '1' })).toBe('(1 échec)');
 		expect(m.status_job_failed({ count: 3, countText: '3' })).toBe('(3 échecs)');
-		locale.set('en');
 	});
 });

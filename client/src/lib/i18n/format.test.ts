@@ -36,6 +36,22 @@ describe('format', () => {
 		expect(formatRelative(ago(400 * 86400), now, 'en')).toBe('last year');
 	});
 
+	it.each([
+		[0, 'now'],
+		[59, '59 seconds ago'],
+		[60, '1 minute ago'],
+		[3600, '1 hour ago'],
+		[86400, 'yesterday'],
+		[6 * 86400, '6 days ago'],
+		[7 * 86400, 'last week'],
+		[29 * 86400, '4 weeks ago'],
+		[30 * 86400, 'last month'],
+		[364 * 86400, '12 months ago'],
+		[365 * 86400, 'last year']
+	])('relative_boundary_%is', (seconds, expected) => {
+		expect(formatRelative(ago(seconds), now, 'en')).toBe(expected);
+	});
+
 	it('accepts_rfc3339_strings', () => {
 		expect(formatRelative('2026-03-05T14:06:00Z', now, 'en')).toBe('1 minute ago');
 	});
