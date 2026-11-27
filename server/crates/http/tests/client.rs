@@ -40,13 +40,31 @@ fn header<'a>(response: &'a Response<Body>, name: &str) -> Option<&'a str> {
 #[tokio::test]
 async fn root_serves_index() {
     let (app, _tmp) = with_client();
-    let response = send(&app, "GET", "/").await;
-    assert_eq!(response.status(), 200);
-    assert_eq!(header(&response, "cache-control"), Some("no-cache"));
-    assert_eq!(header(&response, "content-security-policy"), Some(CSP));
-    assert_eq!(header(&response, "referrer-policy"), Some("no-referrer"));
-    assert_eq!(header(&response, "x-content-type-options"), Some("nosniff"));
-    assert_eq!(text(response).await, "<p>app</p>");
+    for uri in ["/", "/index.html"] {
+        let response = send(&app, "GET", uri).await;
+        assert_eq!(response.status(), 200, "{uri}");
+        assert_eq!(
+            header(&response, "cache-control"),
+            Some("no-cache"),
+            "{uri}"
+        );
+        assert_eq!(
+            header(&response, "content-security-policy"),
+            Some(CSP),
+            "{uri}"
+        );
+        assert_eq!(
+            header(&response, "referrer-policy"),
+            Some("no-referrer"),
+            "{uri}"
+        );
+        assert_eq!(
+            header(&response, "x-content-type-options"),
+            Some("nosniff"),
+            "{uri}"
+        );
+        assert_eq!(text(response).await, "<p>app</p>", "{uri}");
+    }
 }
 
 #[tokio::test]
@@ -104,6 +122,11 @@ async fn missing_asset_is_404() {
     for uri in ["/_app/immutable/gone.js", "/favicon.ico"] {
         let response = send(&app, "GET", uri).await;
         assert_eq!(response.status(), 404, "{uri}");
+        assert_eq!(
+            header(&response, "cache-control"),
+            Some("no-cache"),
+            "{uri}"
+        );
         assert_ne!(text(response).await, "<p>app</p>", "{uri}");
     }
 }

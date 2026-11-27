@@ -76,12 +76,11 @@ fn is_spa_route(path: &str) -> bool {
 }
 
 fn decorate(response: &mut Response<Body>, path: &str, is_index: bool) {
+    // A missing hashed asset must not be cached for a year.
+    let immutable =
+        path.starts_with(IMMUTABLE_PREFIX) && !is_index && response.status().is_success();
     let headers = response.headers_mut();
-    let cache = if path.starts_with(IMMUTABLE_PREFIX) && !is_index {
-        IMMUTABLE
-    } else {
-        "no-cache"
-    };
+    let cache = if immutable { IMMUTABLE } else { "no-cache" };
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
     headers.insert(
         header::REFERRER_POLICY,
