@@ -117,7 +117,13 @@ async fn serve(config: &Config, deps: Deps) -> ExitCode {
     // streams. The graceful shutdown sends `true` on it first, so open
     // `/events` streams end and the server can finish.
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-    let app = http_api::router(http_api::AppState::new(deps, shutdown_rx));
+    if let Some(dir) = &config.client_dir {
+        tracing::info!(client_dir = %dir.display(), "serving the web client");
+    }
+    let app = http_api::router_with_client(
+        http_api::AppState::new(deps, shutdown_rx),
+        config.client_dir.clone().map(http_api::ClientDir::new),
+    );
     match axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             shutdown_signal().await;

@@ -2,6 +2,7 @@
 //! the OpenAPI contract (`api/openapi.json`, `mise run openapi`).
 
 mod auth;
+mod client;
 mod devices;
 mod error;
 mod events;
@@ -23,6 +24,7 @@ use utoipa_axum::router::OpenApiRouter;
 use events::EventDiscriminator;
 
 pub use auth::CurrentDevice;
+pub use client::ClientDir;
 pub use error::{ApiError, ErrorBody, ErrorCode, ErrorDetail};
 pub use extract::{ApiJson, ApiPath};
 pub use state::AppState;
@@ -78,16 +80,24 @@ fn api() -> OpenApiRouter<AppState> {
     )
 }
 
-/// The whole application, layers included.
+/// The API alone, layers included: every path outside it is the JSON 404.
 pub fn router(state: AppState) -> Router {
+    router_with_client(state, None)
+}
+
+/// The API, and with `client` the web client served next to it: a file of
+/// the directory, `index.html` for an app page, a plain 404 for a missing
+/// asset. An unknown `/api` path stays the JSON `not_found`.
+pub fn router_with_client(state: AppState, client: Option<ClientDir>) -> Router {
     let (router, _) = api().split_for_parts();
     router
-        .fallback(|| async { ApiError::new(ErrorCode::NotFound, "not found") })
+        .fallback(move |request| client::fallback(client.clone(), request))
         .method_not_allowed_fallback(|| async {
             ApiError::new(ErrorCode::MethodNotAllowed, "method not allowed")
         })
         .with_state(state)
-        .layer(SetResponseHeaderLayer::overriding(
+        // Not overriding: the static handler sets its own `Cache-Control`.
+        .layer(SetResponseHeaderLayer::if_not_present(
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-store"),
         ))

@@ -154,7 +154,11 @@ async fn stream_events(
         .take_until(shut_down)
         .map(Ok::<_, Infallible>);
     Ok((
-        [(HeaderName::from_static("x-accel-buffering"), "no")],
+        [
+            (HeaderName::from_static("x-accel-buffering"), "no"),
+            // `Sse` says `no-cache`; the API's rule is `no-store`.
+            (HeaderName::from_static("cache-control"), "no-store"),
+        ],
         Sse::new(body).keep_alive(KeepAlive::new().interval(state.ping_interval).text("ping")),
     ))
 }

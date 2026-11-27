@@ -33,6 +33,8 @@ pub struct Config {
     pub log_filter: String,
     /// Where the HTTP API listens.
     pub listen_addr: SocketAddr,
+    /// The built web client, served outside `/api`; `None` serves the API only.
+    pub client_dir: Option<PathBuf>,
 }
 
 /// One invalid variable.
@@ -86,6 +88,7 @@ impl Config {
         let archive = parser.tag_keys("ARCHIVE_CATEGORIES");
         let log_filter = parser.log_filter("RUST_LOG");
         let listen_addr = parser.socket_addr("LISTEN_ADDR", DEFAULT_LISTEN_ADDR);
+        let client_dir = parser.client_dir("CLIENT_DIR");
 
         if !parser.errors.is_empty() {
             return Err(ConfigErrors(parser.errors));
@@ -104,6 +107,7 @@ impl Config {
             dry_run,
             log_filter,
             listen_addr,
+            client_dir,
         })
     }
 }
@@ -218,6 +222,23 @@ impl Parser<'_> {
         fallback
     }
 
+    /// A directory holding the built web client, with an `index.html`.
+    fn client_dir(&mut self, name: &'static str) -> Option<PathBuf> {
+        let value = self.get(name)?.to_owned();
+        let path = PathBuf::from(&value);
+        let problem = match std::fs::metadata(&path) {
+            Err(_) => "does not exist",
+            Ok(meta) if !meta.is_dir() => "is not a directory",
+            Ok(_) if !path.join("index.html").is_file() => "has no index.html",
+            Ok(_) => return Some(path),
+        };
+        self.errors.push(ConfigError {
+            variable: name,
+            message: format!("{value:?} {problem}"),
+        });
+        None
+    }
+
     fn log_filter(&mut self, name: &'static str) -> String {
         let Some(value) = self.get(name) else {
             return DEFAULT_LOG_FILTER.to_owned();
@@ -263,6 +284,52 @@ mod tests {
         assert!(config.spam.archive.is_empty());
         assert_eq!(config.log_filter, "info");
         assert_eq!(config.listen_addr, "127.0.0.1:8000".parse().unwrap());
+        assert_eq!(config.client_dir, None);
+    }
+
+    #[test]
+    fn client_dir_unset_or_empty_is_none() {
+        assert_eq!(Config::from_vars(&vars(&[])).unwrap().client_dir, None);
+        let config = Config::from_vars(&vars(&[("CLIENT_DIR", "  ")])).unwrap();
+        assert_eq!(config.client_dir, None);
+    }
+
+    #[test]
+    fn client_dir_valid() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("index.html"), "<html></html>").unwrap();
+        let value = format!("  {}  ", dir.path().display());
+        let config = Config::from_vars(&vars(&[("CLIENT_DIR", &value)])).unwrap();
+        assert_eq!(config.client_dir.as_deref(), Some(dir.path()));
+    }
+
+    fn assert_client_dir_error(path: &Path, problem: &str) {
+        let value = path.display().to_string();
+        let errs = errors(&[("CLIENT_DIR", &value)]);
+        assert_eq!(errs.len(), 1);
+        assert_eq!(errs[0].variable, "CLIENT_DIR");
+        assert!(errs[0].message.contains(problem), "{}", errs[0]);
+        assert!(errs[0].message.contains(&value), "{}", errs[0]);
+    }
+
+    #[test]
+    fn client_dir_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_client_dir_error(&dir.path().join("absent"), "does not exist");
+    }
+
+    #[test]
+    fn client_dir_is_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("index.html");
+        std::fs::write(&file, "").unwrap();
+        assert_client_dir_error(&file, "is not a directory");
+    }
+
+    #[test]
+    fn client_dir_without_index() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_client_dir_error(dir.path(), "has no index.html");
     }
 
     #[test]

@@ -26,7 +26,7 @@ sqlite = { path = "crates/adapters/sqlite" }
 events-memory = { path = "crates/adapters/events" }
 http-api = { path = "crates/http" }
 axum = { version = "0.8", features = ["macros"] }
-tower-http = { version = "0.6", features = ["trace", "set-header"] }
+tower-http = { version = "0.6", features = ["trace", "set-header", "fs"] }
 utoipa = { version = "5", features = ["chrono"] }
 utoipa-axum = "0.2"
 serde = { version = "1", features = ["derive"] }

@@ -1,13 +1,30 @@
 [tools]
+node = "26"
 rust = { version = "1.99", components = "clippy,rustfmt" }
 
 [tasks.ci]
-description = "Run what the CI runs: format, lint and test the server"
+description = "Run what the CI runs: the server and client checks"
+depends = ["ci:server", "ci:client"]
+
+[tasks."ci:server"]
+description = "Format, lint and test the server"
 dir = "{{config_root}}/server"
 run = [
   "cargo fmt --all --check",
   "cargo clippy --workspace --all-targets --locked -- -D warnings",
   "cargo test --workspace --locked",
+]
+
+[tasks."ci:client"]
+description = "Check the client (run `npm ci` in client/ first)"
+dir = "{{config_root}}/client"
+run = [
+  "npm run check:contract",
+  "npm run check",
+  "npm run lint",
+  "npm test",
+  "npm run build",
+  "npm run check:csp",
 ]
 
 [tasks.openapi]
