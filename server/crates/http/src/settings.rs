@@ -44,7 +44,10 @@ impl From<LanguageDto> for Language {
 pub struct LanguageSettingDto {
     /// Always present, `null` until the user chooses one; the client then
     /// follows its own locale.
-    #[schema(required = true)]
+    // `inline`: for an `Option` of a `$ref`, utoipa 5 puts this doc comment
+    // on the `$ref` branch of the `oneOf`, where generated clients drop it;
+    // inlined, it lands on the property (#81).
+    #[schema(required = true, inline)]
     pub language: Option<LanguageDto>,
 }
 

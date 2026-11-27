@@ -271,7 +271,11 @@ export interface components {
         LanguageDto: "en" | "fr";
         /** @description The language the user chose. */
         LanguageSettingDto: {
-            language: null | components["schemas"]["LanguageDto"];
+            /**
+             * @description Always present, `null` until the user chooses one; the client then
+             *     follows its own locale.
+             */
+            language: null | ("en" | "fr");
         };
         /** @description The language to choose. */
         LanguageUpdateDto: {
