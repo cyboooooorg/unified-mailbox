@@ -13,6 +13,8 @@ interface Connection {
 	init: RequestInit;
 	/** Sends a chunk of the body. */
 	push(text: string): void;
+	/** Sends raw bytes, to cut a character in two. */
+	pushBytes(bytes: Uint8Array): void;
 	/** Ends the body normally. */
 	end(): void;
 	/** Breaks the body mid-stream. */
@@ -40,6 +42,7 @@ function fakeFetch(...script: Script[]) {
 			url: input instanceof Request ? input.url : input.toString(),
 			init,
 			push: (text) => controller.enqueue(encoder.encode(text)),
+			pushBytes: (bytes) => controller.enqueue(bytes),
 			end: () => controller.close(),
 			error: () => controller.error(new TypeError('connection reset'))
 		};
@@ -161,6 +164,7 @@ describe('connectEvents', () => {
 		expect(headers.get('authorization')).toBe('Bearer tok-1');
 		expect(headers.get('accept')).toBe('text/event-stream');
 		expect(url).not.toContain('tok-1');
+		expect(init.cache).toBe('no-store');
 		s.controller.abort();
 		await s.done;
 	});
@@ -187,6 +191,22 @@ describe('connectEvents', () => {
 		s.last().push(`${json.slice(12)}\n\n`);
 		await flush();
 		expect(s.onEvent).toHaveBeenCalledExactlyOnceWith(JOB);
+		s.controller.abort();
+		await s.done;
+	});
+
+	it('delivers an event whose multi-byte character is split across chunks', async () => {
+		const s = start();
+		await flush();
+		const event = { ...JOB, job: { ...JOB.job, kind: 'étiquette' } };
+		const bytes = encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
+		// Cut between the two bytes of the first "é".
+		const cut = bytes.indexOf(0xc3) + 1;
+		s.last().pushBytes(bytes.slice(0, cut));
+		await flush();
+		s.last().pushBytes(bytes.slice(cut));
+		await flush();
+		expect(s.onEvent).toHaveBeenCalledExactlyOnceWith(event);
 		s.controller.abort();
 		await s.done;
 	});

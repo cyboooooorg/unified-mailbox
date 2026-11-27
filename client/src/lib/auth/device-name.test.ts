@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { suggestDeviceName, validateDeviceName } from './device-name';
+import { limit, suggestDeviceName, validateDeviceName } from './device-name';
 
 const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0';
 const SAFARI_IPHONE =
@@ -25,8 +25,45 @@ describe('suggestDeviceName', () => {
 		expect(suggestDeviceName('SomeBot/1.0')).toBe('Web browser');
 	});
 
-	it('is never over 64 characters', () => {
-		expect(suggestDeviceName(FIREFOX_LINUX.repeat(20)).length).toBeLessThanOrEqual(64);
+	it.each([
+		[
+			'Edge, which also says Chrome and Safari',
+			CHROME_WINDOWS + ' Edg/126.0.2592.81',
+			'Edge on Windows'
+		],
+		[
+			'Opera, which also says Chrome and Safari',
+			CHROME_WINDOWS + ' OPR/112.0.0.0',
+			'Opera on Windows'
+		],
+		[
+			'Chrome on Android, which also says Linux',
+			'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
+			'Chrome on Android'
+		],
+		[
+			'Safari on iPad, which also says Mac OS X',
+			'Mozilla/5.0 (iPad; CPU OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+			'Safari on iPad'
+		]
+	])('names %s', (_name, userAgent, expected) => {
+		expect(suggestDeviceName(userAgent)).toBe(expected);
+	});
+});
+
+describe('limit', () => {
+	it('keeps a name of 64 code points', () => {
+		expect(limit('a'.repeat(64))).toBe('a'.repeat(64));
+	});
+
+	it('cuts a longer name to 64 code points, not UTF-16 units', () => {
+		const emoji = '\u{1F600}';
+		expect(limit(emoji.repeat(70))).toBe(emoji.repeat(64));
+		expect(limit('a'.repeat(70))).toBe('a'.repeat(64));
+	});
+
+	it('gives a valid name once cut', () => {
+		expect(validateDeviceName(limit('b'.repeat(100)))).toBeNull();
 	});
 });
 
@@ -37,6 +74,16 @@ describe('validateDeviceName', () => {
 
 	it('accepts exactly 64 characters', () => {
 		expect(validateDeviceName('a'.repeat(64))).toBeNull();
+	});
+
+	it('counts code points, not UTF-16 units', () => {
+		const emoji = '\u{1F600}';
+		expect(validateDeviceName(emoji.repeat(64))).toBeNull();
+		expect(validateDeviceName(emoji.repeat(65))).toBe('At most 64 characters.');
+	});
+
+	it('trims before counting', () => {
+		expect(validateDeviceName('  ' + 'a'.repeat(64) + '  ')).toBeNull();
 	});
 
 	it('rejects an empty or blank name', () => {

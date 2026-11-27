@@ -23,6 +23,15 @@ const SYSTEMS: readonly [RegExp, string][] = [
 
 /** A name for this browser, such as "Firefox on Linux", to prefill the pairing form. */
 export function suggestDeviceName(userAgent: string): string {
+	return limit(suggest(userAgent));
+}
+
+/** Cuts a name to the server's limit, counting code points as it does. */
+export function limit(name: string): string {
+	return [...name].slice(0, MAX_LENGTH).join('');
+}
+
+function suggest(userAgent: string): string {
 	const browser = BROWSERS.find(([pattern]) => pattern.test(userAgent))?.[1];
 	if (!browser) return FALLBACK;
 	const system = SYSTEMS.find(([pattern]) => pattern.test(userAgent))?.[1];

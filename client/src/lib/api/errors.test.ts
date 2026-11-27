@@ -8,12 +8,19 @@ describe('describeError', () => {
 		);
 	});
 
-	it.each([null, undefined, {}, { error: 'x' }, { error: {} }, { error: { code: 'nope' } }, 'x'])(
-		'falls back to the generic message for %j',
-		(body) => {
-			expect(describeError(body)).toBe(GENERIC_ERROR);
-		}
-	);
+	it.each([
+		null,
+		undefined,
+		{},
+		{ error: 'x' },
+		{ error: {} },
+		{ error: { code: 'nope' } },
+		{ error: { code: 'toString' } },
+		{ error: { code: 'constructor' } },
+		'x'
+	])('falls back to the generic message for %j', (body) => {
+		expect(describeError(body)).toBe(GENERIC_ERROR);
+	});
 
 	it('has a message for every code', () => {
 		expect(errorMessage('unauthorized')).not.toBe('');
