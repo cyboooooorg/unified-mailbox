@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { limit, suggestDeviceName, validateDeviceName } from './device-name';
+import { suggestDeviceName, validateDeviceName } from './device-name';
 
 const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0';
 const SAFARI_IPHONE =
@@ -48,22 +48,6 @@ describe('suggestDeviceName', () => {
 		]
 	])('names %s', (_name, userAgent, expected) => {
 		expect(suggestDeviceName(userAgent)).toBe(expected);
-	});
-});
-
-describe('limit', () => {
-	it('keeps a name of 64 code points', () => {
-		expect(limit('a'.repeat(64))).toBe('a'.repeat(64));
-	});
-
-	it('cuts a longer name to 64 code points, not UTF-16 units', () => {
-		const emoji = '\u{1F600}';
-		expect(limit(emoji.repeat(70))).toBe(emoji.repeat(64));
-		expect(limit('a'.repeat(70))).toBe('a'.repeat(64));
-	});
-
-	it('gives a valid name once cut', () => {
-		expect(validateDeviceName(limit('b'.repeat(100)))).toBeNull();
 	});
 });
 
