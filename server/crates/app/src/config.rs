@@ -21,6 +21,20 @@ const DEFAULT_SPAM_THRESHOLD: u8 = 90;
 const DEFAULT_LOG_FILTER: &str = "info";
 const DEFAULT_LISTEN_ADDR: &str = "127.0.0.1:8000";
 
+/// Every variable [`Config::from_vars`] reads. A process variable of one
+/// of these names whose value is not valid UTF-8 is an error, not skipped.
+pub const KNOWN_VARIABLES: [&str; 9] = [
+    "DATA_DIR",
+    "KEY_FILE",
+    "DRY_RUN",
+    "SPAM_THRESHOLD",
+    "PROTECT_KNOWN_SENDERS",
+    "ARCHIVE_CATEGORIES",
+    "RUST_LOG",
+    "LISTEN_ADDR",
+    "CLIENT_DIR",
+];
+
 /// Everything the server reads from its configuration.
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -122,6 +136,10 @@ struct Parser<'a> {
 impl Parser<'_> {
     /// The trimmed value, or `None` when unset or empty.
     fn get(&self, name: &str) -> Option<&str> {
+        debug_assert!(
+            KNOWN_VARIABLES.contains(&name),
+            "{name} is read but missing from KNOWN_VARIABLES"
+        );
         self.vars
             .get(name)
             .map(|value| value.trim())
@@ -257,6 +275,19 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+
+    // The check is a `debug_assert!`: a release build has none.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "NOT_LISTED is read but missing from KNOWN_VARIABLES")]
+    fn reading_an_unlisted_variable_fails_in_tests() {
+        let vars = HashMap::new();
+        let parser = Parser {
+            vars: &vars,
+            errors: Vec::new(),
+        };
+        parser.get("NOT_LISTED");
+    }
 
     fn vars(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs

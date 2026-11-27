@@ -31,6 +31,59 @@ fn invalid_variables_listed() {
 }
 
 #[test]
+fn unreadable_dotenv_stops_the_server() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir(dir.path().join(".env")).unwrap();
+    let out = run(dir.path(), &[("DATA_DIR", "./d")]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr.starts_with(".env: cannot read:"), "{stderr}");
+    assert!(!dir.path().join("d").exists(), "started anyway");
+}
+
+#[test]
+fn dotenv_not_utf8_stops_the_server_without_its_content() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut content = b"DRY_RUN=true\nSOME_TOKEN=invented-0000".to_vec();
+    content.push(0xff);
+    content.push(b'\n');
+    fs::write(dir.path().join(".env"), content).unwrap();
+    let out = run(dir.path(), &[("DATA_DIR", "./d")]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr.starts_with(".env: cannot read:"), "{stderr}");
+    assert!(!stderr.contains("invented-0000"), "{stderr}");
+}
+
+#[cfg(unix)]
+#[test]
+fn known_variable_not_utf8_is_reported_without_its_value() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut value = b"./invented-0000".to_vec();
+    value.push(0xff);
+    let out = Command::new(env!("CARGO_BIN_EXE_unified-mailbox"))
+        .current_dir(dir.path())
+        .env_clear()
+        .env("DATA_DIR", OsString::from_vec(value))
+        .output()
+        .expect("run the server");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(
+        stderr.contains("DATA_DIR: value is not valid UTF-8"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("invented-0000"), "{stderr}");
+    assert!(
+        !dir.path().join("data").exists(),
+        "fell back to the default"
+    );
+}
+
+#[test]
 fn fatal_error_shown_when_logs_filter_it_out() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("afile"), "").unwrap();

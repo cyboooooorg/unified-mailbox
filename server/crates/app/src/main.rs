@@ -36,7 +36,7 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let config = match Config::from_vars(&env::overlay(file, std::env::vars_os())) {
+    let config = match env::load(file, std::env::vars_os()) {
         Ok(config) => config,
         Err(errors) => {
             eprintln!("configuration errors:\n{errors}");

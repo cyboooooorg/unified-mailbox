@@ -89,7 +89,11 @@ from (`server/.env` with the command above) to start.
   unquoted or in double quotes. Put a value holding a `$` in single
   quotes to keep it as written.
 - A malformed `.env` stops the server with the line number only, never
-  the line's content.
+  the line's content. An unreadable `.env` (a directory, no permission,
+  not UTF-8) stops it too, without its content.
+- A variable the server reads whose value is not valid UTF-8 is
+  reported like any invalid variable, without its value. Other
+  variables that are not valid UTF-8 are ignored.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
