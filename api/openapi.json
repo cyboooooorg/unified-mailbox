@@ -776,10 +776,15 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/LanguageDto",
-                "description": "Always present, `null` until the user chooses one; the client then\nfollows its own locale."
+                "type": "string",
+                "description": "A language the interface and Claude's text can be in.",
+                "enum": [
+                  "en",
+                  "fr"
+                ]
               }
-            ]
+            ],
+            "description": "Always present, `null` until the user chooses one; the client then\nfollows its own locale."
           }
         }
       },

@@ -118,3 +118,24 @@ fn event_schema_is_a_tagged_one_of() {
     let events = &doc["paths"]["/api/v1/events"]["get"]["responses"]["200"]["content"];
     assert!(events.get("text/event-stream").is_some(), "{events}");
 }
+
+#[test]
+fn nullable_language_keeps_its_description_on_the_property() {
+    let doc = serde_json::to_value(openapi()).unwrap();
+    let language = &doc["components"]["schemas"]["LanguageSettingDto"]["properties"]["language"];
+    let description = language["description"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no description on the property: {language}"));
+    assert!(
+        description.contains("`null` until the user chooses one"),
+        "{description}"
+    );
+    let branches = language["oneOf"].as_array().expect("language is a oneOf");
+    assert!(branches.iter().any(|b| b["type"] == "null"), "{language}");
+    assert!(
+        branches.iter().all(|b| b
+            .get("description")
+            .is_none_or(|d| !d.as_str().unwrap().contains("`null`"))),
+        "the property's description is on a oneOf branch: {language}"
+    );
+}
