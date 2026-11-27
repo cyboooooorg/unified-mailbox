@@ -8,6 +8,7 @@ mod jobs;
 #[cfg(test)]
 mod schema_tests;
 mod secret;
+mod settings;
 mod store;
 pub mod time;
 

@@ -7,15 +7,18 @@
 //! - [`devices`]: [`DeviceRepository`], paired devices and pairing codes.
 //! - [`jobs`]: [`JobRepository`], long operations and their progress.
 //! - [`events`]: [`EventBus`], events pushed to the clients.
+//! - [`settings`]: [`SettingsRepository`], the user's settings.
 
 pub mod clock;
 pub mod devices;
 pub mod events;
 pub mod jobs;
 pub mod secrets;
+pub mod settings;
 
 pub use clock::*;
 pub use devices::*;
 pub use events::*;
 pub use jobs::*;
 pub use secrets::*;
+pub use settings::*;
